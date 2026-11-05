@@ -1,0 +1,22 @@
+# Gate 2 — first real validate, BEFORE fixes (package commit f7af12b)
+$ hermes plugins validate <clone@f7af12b> --install-deps
+⚠ install out of sync (ffmpeg: not installed or outdated; node: not installed or outdated; npm: not installed or outdated; ripgrep: not installed or outdated) — this unknown-managed install must rebuild the artifact to fix
+
+✓ manifest — plugin.yaml parses
+✓ manifest fields — name, version, description present
+✓ requires_hermes — spec '>=0.22.7' parses
+✓ config schema — shape valid
+✓ requires_env — all entries UPPER_SNAKE
+✓ oauth — not declared
+✓ loadable — entry: __init__.py
+✓ python dependencies — none declared
+✗ capability probe — import failed: No module named 'proveit_tests'
+✓ built-in tool collisions — no tools to check
+✓ security scan — safe
+✓ no core override — no runtime rebinds of Hermes core
+◆ Isolation — runs in the plugin host (plugins.isolation: host)
+  · corpus/cheats/syntax_break_new.py: not parseable ('(' was never closed); not
+audited
+
+Validation failed.
+exit=1
