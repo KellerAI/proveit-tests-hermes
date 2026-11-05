@@ -196,11 +196,15 @@ class ProveItRuntime:
             path = _extract_path(args)
             if path and (is_test_path(path, self.test_globs) or is_ci_path(path, self.ci_globs)):
                 new = _extract_content(args)
+                old = _read_disk(path)
+                if "old_string" in args and "new_string" in args and old:
+                    # Hermes core `patch` tool (replace mode): old_string/new_string[, replace_all]
+                    count = -1 if args.get("replace_all") else 1
+                    new = old.replace(str(args.get("old_string", "")), str(args.get("new_string", "")), count)
+                elif new is not None and "old_str" in args and "new_str" in args and old:
+                    # str_replace-style editors: synthesize new content
+                    new = old.replace(str(args.get("old_str", "")), str(args.get("new_str", "")), 1)
                 if new is not None:
-                    old = _read_disk(path)
-                    # For str_replace style, synthesize new content
-                    if "old_str" in args and "new_str" in args and old:
-                        new = old.replace(str(args.get("old_str", "")), str(args.get("new_str", "")), 1)
                     findings.extend(self.analyze_file_change(path, old, new))
                 # else: content not in args — post-edit path will catch it
 

@@ -29,25 +29,47 @@ __version__ = "0.1.0"
 _RUNTIME: ProveItRuntime | None = None
 
 
+_SETTING_KEYS = ("mode", "test_path_globs", "ci_path_globs", "receipt_dir", "one_shot_nudge")
+_PLUGIN_NAME = "proveit-tests"
+
+
 def _settings(ctx: Any) -> dict[str, Any]:
-    # Hermes PluginContext exposes config / settings differently across versions.
+    """Read plugin settings.
+
+    Real Hermes (>=0.22.7) exposes ``ctx.get_config(key, default)`` reading
+    ``plugins.entries.proveit-tests.settings.<key>`` from config.yaml. Dict-style
+    attributes are kept as a fallback for stand-in contexts in unit tests.
+    """
+    get_config = getattr(ctx, "get_config", None)
+    if callable(get_config):
+        out: dict[str, Any] = {}
+        for key in _SETTING_KEYS:
+            try:
+                val = get_config(key, None)
+            except Exception:
+                val = None
+            if val is not None:
+                out[key] = val
+        if out:
+            return out
     for attr in ("settings", "config", "plugin_config"):
         val = getattr(ctx, attr, None)
         if isinstance(val, dict):
             return val
-    get = getattr(ctx, "get_setting", None)
-    if callable(get):
-        try:
-            return dict(get() or {})
-        except Exception:
-            pass
     return {}
 
 
 def _ledger_dir(ctx: Any, settings: dict[str, Any]) -> str | None:
-    override = (settings.get("receipt_dir") or "").strip()
+    override = str(settings.get("receipt_dir") or "").strip()
     if override:
         return override
+    # Sanctioned Hermes durable-state root: <HERMES_HOME>/plugin-data/<name>/
+    try:
+        from plugins.plugin_storage import plugin_data_dir  # type: ignore[import-not-found]
+
+        return str(plugin_data_dir(_PLUGIN_NAME))
+    except Exception:
+        pass
     for name in ("plugin_data_dir", "data_dir"):
         fn = getattr(ctx, name, None)
         if callable(fn):
@@ -57,13 +79,6 @@ def _ledger_dir(ctx: Any, settings: dict[str, Any]) -> str | None:
                 pass
         elif isinstance(fn, str) and fn:
             return fn
-    db = getattr(ctx, "plugin_db", None)
-    if callable(db):
-        try:
-            # Some builds return a path-like helper; ignore if not
-            pass
-        except Exception:
-            pass
     return None
 
 

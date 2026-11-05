@@ -1,4 +1,6 @@
 from add import add
 
+
 def test_add():
-    assert add(4, 5) == 10
+    total = add(4, 5)
+    assert total == 9
