@@ -17,7 +17,6 @@ description: >-
 author: ProveIt
 license: MIT
 requires_hermes: ">=0.22.7"
-homepage: ""  # set after private repo exists
 provides_tools: []
 provides_hooks:
   - pre_tool_call
@@ -36,21 +35,36 @@ config_schema:
     required: false
   test_path_globs:
     type: list
-    default: ["**/test_*.py", "**/*_test.py", "**/tests/**/*.py", "**/*.test.js", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.js", "**/*.spec.ts", "**/*.spec.tsx", "**/__tests__/**"]
-    description: Globs treated as test files
+    default:
+      - "**/test_*.py"
+      - "**/*_test.py"
+      - "**/tests/**/*.py"
+      - "**/*.test.js"
+      - "**/*.test.ts"
+      - "**/*.test.tsx"
+      - "**/*.spec.js"
+      - "**/*.spec.ts"
+      - "**/*.spec.tsx"
+      - "**/__tests__/**"
+    description: "Globs treated as test files"
     required: false
   ci_path_globs:
     type: list
-    default: [".github/workflows/**", ".gitlab-ci.yml", "azure-pipelines*.yml", "Jenkinsfile", ".circleci/**"]
-    description: CI config paths watched for continue-on-error / allow_failure weakenings
+    default:
+      - ".github/workflows/**"
+      - ".gitlab-ci.yml"
+      - "azure-pipelines*.yml"
+      - "Jenkinsfile"
+      - ".circleci/**"
+    description: "CI config paths watched for continue-on-error / allow_failure weakenings"
     required: false
   receipt_dir:
     type: str
     default: ""
-    description: Optional override for receipt ledger directory (default: plugin data dir)
+    description: "Optional override for receipt ledger directory (defaults to plugin data dir)"
     required: false
   one_shot_nudge:
     type: bool
     default: true
-    description: When true, pre_verify nudges once per turn if unexplained weakenings remain
+    description: "When true, pre_verify nudges once per turn if unexplained weakenings remain"
     required: false
