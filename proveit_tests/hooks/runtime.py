@@ -1,5 +1,22 @@
 """ProveItRuntime — core logic callable from Hermes hooks or unit tests.
 
+Hook wiring follows public Hermes plugin docs
+(https://hermes-agent.nousresearch.com/docs/developer-guide/plugins and
+https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks):
+
+- `pre_tool_call` may return
+  `{"action": "block", "message": ...}` or
+  `{"action": "approve", "message": ..., "rule_key": ...}`
+  (approve escalates to the human-approval gate; `rule_key` keeps per-rule
+  allowlists from collapsing — see Hermes PR #59163 / #60504).
+- `post_tool_call` is observer-only (return ignored).
+- `transform_tool_result` may return a string that replaces the model-bound
+  tool result (first string wins).
+- `pre_verify` may return `{"action": "continue", "message": ...}` at the
+  edited-code verify gate.
+- Callbacks accept `**kwargs` for additive payload fields.
+- Hook callbacks are fail-open in Hermes (exception → log + continue).
+
 Hook feasibility (honest):
 - `pre_tool_call` receives tool args. For Hermes `write_file` / `patch`, the
   proposed content is typically in `args` (`content`, `new_content`, `diff`,
@@ -9,7 +26,8 @@ Hook feasibility (honest):
   command string in pre_tool_call — we flag known escape-hatch commands there,
   and re-scan the file on `post_tool_call` when a test path was touched.
 - This is NOT unbypassable: disable the plugin, use novel shell indirections,
-  or edit outside watched globs and detectors will miss it.
+  or edit outside watched globs and detectors will miss it. Hermes itself does
+  not claim plugin hooks are a sandbox.
 
 When proposed content is missing from args, we fall back to post-edit observe
 on the next tool call / transform_tool_result and document that in STATUS.md.
@@ -137,17 +155,28 @@ class ProveItRuntime:
         )
         self._pending_warnings.append(msg)
 
+        # rule_key keeps Hermes "[a]lways" approvals scoped to this plugin's
+        # weakening rule rather than blanket-approving every write_file call.
+        rule_key = "proveit-tests:test-weakening"
         unattended = self.cron.is_unattended()
         if self.mode == Mode.OBSERVE:
             return None
         if self.mode == Mode.BLOCK_UNATTENDED and unattended:
-            return {"action": "block", "message": msg + " [blocked: unattended/cron]"}
+            return {
+                "action": "block",
+                "message": msg + " [blocked: unattended/cron]",
+                "rule_key": rule_key,
+            }
         if self.mode == Mode.BLOCK_UNATTENDED and not unattended:
-            return {"action": "approve", "message": msg}
+            return {"action": "approve", "message": msg, "rule_key": rule_key}
         if self.mode == Mode.ESCALATE:
             if unattended:
-                return {"action": "block", "message": msg + " [blocked: unattended/cron]"}
-            return {"action": "approve", "message": msg}
+                return {
+                    "action": "block",
+                    "message": msg + " [blocked: unattended/cron]",
+                    "rule_key": rule_key,
+                }
+            return {"action": "approve", "message": msg, "rule_key": rule_key}
         return None
 
     # ------------------------------------------------------------------- hooks

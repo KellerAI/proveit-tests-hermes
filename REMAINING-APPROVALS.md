@@ -8,7 +8,7 @@ Private repo created and seeded:
 - URL: https://github.com/KellerAI/proveit-tests-hermes (private)
 - Owner: KellerAI (entrant identity)
 - Created as jonathan-kellerai; son-of-anton-ai write-only
-- Tree pushed: `2bf63bd` on `main`
+- Tree pushed on `main` (lineage from `2bf63bd`; see STATUS.md for tip)
 
 ## Gate 2 (NEXT) — Hermes install for validate/doctor + recorded demo
 
@@ -18,7 +18,7 @@ Approve installing Hermes `>=0.22.7` in a **throwaway profile on the box** (not 
 - `hermes plugins doctor . --ci`
 - Synthetic recorded demo (<90s) against the throwaway profile
 
-Without this gate, unit tests alone are not submission-ready.
+Without this gate, pure-Python unit + mock-PluginContext tests alone are not submission-ready — real validate/doctor + recorded demo still required.
 
 ## Gate 3 — Go public + license attribution
 

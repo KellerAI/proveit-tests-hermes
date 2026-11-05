@@ -26,8 +26,8 @@ Edits to test files and test-runner / CI commands:
 | Mode | Behavior |
 |---|---|
 | `observe` (default) | Append a warning to the tool result (model sees it). Never blocks. |
-| `escalate` | `pre_tool_call` returns `{"action":"approve"}` → Hermes human-approval gate. Blocks on cron/unattended. |
-| `block_unattended` | Blocks when `ctx.current_cron_execution()` is set; otherwise escalates. |
+| `escalate` | `pre_tool_call` returns `{"action":"approve","rule_key":"proveit-tests:test-weakening"}` → Hermes human-approval gate. Blocks on cron/unattended. |
+| `block_unattended` | Blocks when `ctx.current_cron_execution()` is set; otherwise escalates (same `rule_key`). |
 
 At turn end, `pre_verify` can nudge once if unexplained weakenings remain. `/proveit` prints the session receipt ledger. Footer shape: `Tests: N passed / K weakened · receipt <hash>`.
 
@@ -101,12 +101,14 @@ If a future Hermes build stops putting file contents in write/patch args, pre-ed
 ## Development (no Hermes required)
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install pytest coverage
-.venv/bin/coverage run -m pytest -q
-.venv/bin/coverage report --include='proveit_tests/*'
+python3 -m venv .venv && .venv/bin/pip install pytest pytest-cov
+.venv/bin/pytest --cov=proveit_tests --cov-report=term-missing -q
 ```
 
-Golden corpus under `corpus/cheats/` (must flag) and `corpus/legit/` (false-positive control).
+Golden corpus under `corpus/cheats/` (must flag) and `corpus/legit/` (false-positive control:
+extract-to-helper, rename test, reformat, type hints, `# proveit: intended` waivers).
+Mock Hermes PluginContext integration tests live in `tests/test_hermes_integration_mock.py`
+(pure Python — real `hermes plugins validate`/`doctor` still needs Gate 2).
 
 ## License
 

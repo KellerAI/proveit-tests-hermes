@@ -68,7 +68,13 @@ def _get_runtime() -> ProveItRuntime:
 
 
 def register(ctx: Any) -> None:
-    """Hermes plugin entry point."""
+    """Hermes plugin entry point.
+
+    Registers documented hooks + `/proveit` slash command. Callbacks accept
+    ``**kwargs`` so additive Hermes payload fields stay backward-compatible.
+    Escalate directives include ``rule_key`` for per-rule approval persistence.
+    Not unbypassable — see README "Hook feasibility".
+    """
     global _RUNTIME
     settings = _settings(ctx)
     mode = resolve_mode(settings.get("mode"))
@@ -109,8 +115,10 @@ def register(ctx: Any) -> None:
     def on_session_end(**kwargs):
         pass
 
-    def proveit_cmd(args_raw: str = "", **kwargs):
-        return rt.slash_proveit(args_raw or "")
+    def proveit_cmd(raw_args: str = "", **kwargs):
+        # Hermes passes the raw argument string positionally; **kwargs carries
+        # optional session_id / platform / source when the handler opts in.
+        return rt.slash_proveit(raw_args or "")
 
     ctx.register_hook("pre_tool_call", pre_tool_call)
     ctx.register_hook("post_tool_call", post_tool_call)

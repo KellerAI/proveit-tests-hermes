@@ -71,6 +71,32 @@ def _count_asserts(node: ast.AST) -> int:
     return n
 
 
+
+
+def _module_assert_count(tree: ast.AST | None) -> int:
+    if tree is None:
+        return 0
+    return sum(_count_asserts(node) for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)))
+
+
+def _looks_like_rename(
+    old_funcs: dict[str, ast.AST],
+    new_funcs: dict[str, ast.AST],
+    removed_name: str,
+) -> str | None:
+    """If a deleted test has a same-assert-count newly added twin, treat as rename.
+
+    Returns the matched new name, or None. Greedy; callers should consume matches.
+    """
+    if removed_name not in old_funcs:
+        return None
+    old_n = _count_asserts(old_funcs[removed_name])
+    added = sorted(set(new_funcs) - set(old_funcs))
+    for cand in added:
+        if _count_asserts(new_funcs[cand]) == old_n:
+            return cand
+    return None
+
 def _decorator_names(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
     names: list[str] = []
     for d in node.decorator_list:
@@ -258,8 +284,26 @@ def detect_python_diff(old: str, new: str, path: str = "") -> list[Finding]:
     old_funcs = _func_nodes(old_tree) if old_tree else {}
     new_funcs = _func_nodes(new_tree)
 
-    # Deleted tests
+    # Module-level assert stability: extract-to-helper keeps total asserts
+    # but drops per-test counts — suppress removed-assert / assertionless FPs.
+    old_module_asserts = _module_assert_count(old_tree)
+    new_module_asserts = _module_assert_count(new_tree)
+    module_asserts_stable = new_module_asserts >= old_module_asserts and old_module_asserts > 0
+
+    if module_asserts_stable:
+        findings = [
+            f
+            for f in findings
+            if f.kind not in {"removed-assert", "assertionless-test"}
+        ]
+
+    # Deleted tests (skip rename-shaped pairs: same assert count, new name appeared)
+    claimed_renames: set[str] = set()
     for name in sorted(set(old_funcs) - set(new_funcs)):
+        twin = _looks_like_rename(old_funcs, new_funcs, name)
+        if twin and twin not in claimed_renames:
+            claimed_renames.add(twin)
+            continue
         findings.append(
             Finding(
                 kind="deleted-test",
@@ -277,7 +321,7 @@ def detect_python_diff(old: str, new: str, path: str = "") -> list[Finding]:
         old_node = old_funcs[name]
         old_n = _count_asserts(old_node)
         new_n = _count_asserts(new_node)
-        if new_n < old_n:
+        if new_n < old_n and not module_asserts_stable:
             findings.append(
                 Finding(
                     kind="removed-assert",

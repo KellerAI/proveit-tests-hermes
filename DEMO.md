@@ -25,3 +25,5 @@ python -m pytest -q   # should FAIL on the intentional bug
 ```
 
 Recording the actual screen demo requires Jonathan's Hermes install + model approvals (see REMAINING-APPROVALS.md).
+
+Pure-Python mock PluginContext tests cover hook wiring; they do not replace this Gate 2 recording.
