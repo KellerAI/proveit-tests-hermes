@@ -1,0 +1,5 @@
+⚠ install out of sync (ffmpeg: not installed or outdated; node: not installed or outdated; npm: not installed or outdated; ripgrep: not installed or outdated) — this unknown-managed install must rebuild the artifact to fix
+Plugin Doctor: /workspace/hermes-hackathon-launch/proveit-tests-hermes
+  manifest: proveit-tests 0.1.0 (standalone)
+  OK: runtime discovery, manifest parsing, import, and registration passed
+  registrations: 0 tool(s), 6 hook(s)

@@ -8,18 +8,35 @@ Synthetic fixture only. No real accounts, no Mac Mini, no private data, no model
 - `demo/recordings/proveit-real-hermes-demo.gif` (same video as a GIF)
 - `demo/recordings/proveit-real-hermes-demo.cast` (asciinema v2 source)
 
-**How it was made:** `asciinema rec` of
-`/workspace/hermes-hackathon-launch/demo-harness/real_hermes_demo.py` (DEMO_PACE=1.7), rendered with `agg` and
-`ffmpeg`. The runtime is a **real Hermes v0.22.7** in the throwaway profile (see VALIDATION.md). The plugin is
-installed with `hermes plugins install file://… --ref <sha>` and set to `mode: escalate`. Every tool call goes through
-Hermes' own dispatcher, hooks, approval gate and the core `patch` / `terminal` tools.
+**How it was made:** `asciinema rec` of the demo harness (DEMO_PACE=1.7), rendered with `agg` and `ffmpeg`.
+The runtime is a **real Hermes v0.22.7** in a throwaway profile (see VALIDATION.md). The plugin is installed with
+`hermes plugins install file://… --ref <sha>` and set to `mode: escalate`. Every tool call goes through Hermes' own
+dispatcher, hooks, approval gate and the core `patch` / `terminal` tools.
 
-**What is scripted:** the agent. The tool calls a model would emit are hard-coded, so no provider or API key
-is involved, and the approval answer `d` is fed to the real Hermes prompt by the harness.
+**What is scripted:** the agent. The tool calls a model would emit are hard-coded, so no provider, API key or
+model is involved, and the approval answer `d` is fed to the real Hermes prompt by the harness. **This is not a
+live-model demo** (that is Gate 5, below).
 
-**Why the harness lives outside the repo:** it imports Hermes internals (`model_tools`, the plugin manager).
-Inside the plugin tree, `hermes plugins validate` warns about that under catalog rule 9. The recording was made
-from the in-repo copy at `97a4197`. The harness logic is unchanged since then; only its path resolution moved.
+**Where the harness lives:** `.demo-harness/` in this repo (`real_hermes_demo.py` + `throwaway-env.sh`, paths
+relative to the repo). It is demo-only: `register()` never imports it and it is not part of the plugin runtime.
+It drives Hermes internals (`model_tools`, the plugin manager) to replay the scripted calls. Those are private
+Hermes surfaces, so in a loadable dir `hermes plugins validate` lists them under catalog rule 9 (verified: a
+`demo/harness/` placement produced that warning). The validator skips hidden dirs (like `.github/` CI helpers)
+because Hermes never loads them, so in `.demo-harness/` validate reports no rule-9 warning. The plugin itself
+imports only public surfaces. The recording was made from the harness at `97a4197`; since then only its path
+resolution changed (now relative to the repo instead of an absolute path).
+
+**Checksums (SHA-256):**
+
+| File | SHA-256 |
+|---|---|
+| `demo/recordings/proveit-real-hermes-demo.mp4` | `a42b7425126cbefbddc664fcbac04cd9177fc8bdfdf50fa9ea8dfcb8ce08b58d` |
+| `demo/recordings/proveit-real-hermes-demo.gif` | `6f2ee1dd2b430a4c4a51c86157c9d5368ca7864193fd4cbeba1083a444e8d0ac` |
+| `demo/recordings/proveit-real-hermes-demo.cast` | `d766f2f9e73340b4f22aa8b0ea48daf1212d2c6b60a6ba6a237b5e405893f889` |
+| `.demo-harness/real_hermes_demo.py` | `14dfa0018af13dd439a3bfbdc329d4aee59b5d32cc4a7feb88a9cbdc4d19e302` |
+| `.demo-harness/throwaway-env.sh` | `a55677b44e9bf6ace9564138ae3842281038e3c844ab02700823f12a979a86e3` |
+
+Verify: `sha256sum demo/recordings/* .demo-harness/*`
 
 | Time | Beat (as recorded) |
 |---:|---|
@@ -34,10 +51,13 @@ from the in-repo copy at `97a4197`. The harness logic is unchanged since then; o
 Re-run (about 55 s at DEMO_PACE=1.7; `DEMO_PACE=0` for a fast check):
 
 ```bash
-source /workspace/hermes-hackathon-launch/throwaway-hermes/env.sh
+# from the repo root; expects ../throwaway-hermes/{home,hermes-home,venv} or set PROVEIT_THROWAWAY
+source .demo-harness/throwaway-env.sh
 rm -rf "$HERMES_HOME/plugin-data/proveit-tests"
-python /workspace/hermes-hackathon-launch/demo-harness/real_hermes_demo.py
+python .demo-harness/real_hermes_demo.py
 ```
+
+The test runner inside the demo defaults to `.venv/bin/python` in this repo; override with `PROVEIT_DEMO_PYTHON`.
 
 ## Still gated: live agent beat (Gate 5)
 

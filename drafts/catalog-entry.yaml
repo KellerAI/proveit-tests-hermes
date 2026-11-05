@@ -4,7 +4,7 @@ name: proveit-tests
 repo: https://github.com/EXAMPLE/proveit-tests-hermes
 sha: "0000000000000000000000000000000000000000"  # PLACEHOLDER — replace after public freeze
 description: >-
-  Catches an agent weakening tests to reach green: removed or loosened asserts,
+  Flags recognizable ways an agent weakens tests to reach green: removed or loosened asserts,
   skip/xfail/.only, deleted tests, expected literals rewritten to match failing
   output, assert True / tautologies, try/except pass wrappers, and test-runner
   escape hatches (pytest || true, -k "not …", --deselect, --passWithNoTests,
@@ -14,9 +14,13 @@ description: >-
   JS/TS coverage is heuristic and limited. Disclosure (rule 13): local-only,
   reads edited test files and tool args to compare before/after; appends
   warnings into tool results; may escalate or block tool calls when configured.
+  Ledger is written only under the Hermes plugin data dir (in-memory if none;
+  never /tmp); terminal findings keep a short, secret-redacted command excerpt
+  locally.
   Not a sandbox and not unbypassable — an agent can still rewrite via shell,
   disable the plugin, or invent new weakenings. Complements core verify-on-stop
-  and claim-vs-evidence plugins.
+  and claim-vs-evidence plugins. No findings is not proof that tests were
+  preserved.
 maintainer: EXAMPLE  # UNRESOLVED entrant identity
 tier: community
 category: tools

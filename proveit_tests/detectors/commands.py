@@ -54,6 +54,60 @@ _SOFT_FAIL = re.compile(
 )
 
 
+_REDACTED = "[REDACTED]"
+_REDACT_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    # URL userinfo: scheme://user:pass@host
+    (re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)[^\s/@:]+(?::[^\s/@]*)?@"), r"\1" + _REDACTED + "@"),
+    # Authorization headers / bearer tokens
+    (re.compile(r"(?i)\b(authorization\s*:\s*)(?:bearer|basic|token)?\s*\S+"), r"\1" + _REDACTED),
+    (re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}"), r"\1 " + _REDACTED),
+    # Secret-looking env assignments: FOO_TOKEN=..., PASSWORD=..., AWS_SECRET_ACCESS_KEY=...
+    (
+        re.compile(
+            r"(?i)\b([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|PASSWD|PWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|CREDENTIALS?|AUTH)[A-Z0-9_]*=)"
+            r"(?:\"[^\"]*\"|'[^']*'|\S+)"
+        ),
+        r"\1" + _REDACTED,
+    ),
+    # Secret-looking CLI flags: --token X, --password=X, --api-key X
+    (
+        re.compile(
+            r"(?i)(--?[a-z0-9-]*(?:token|secret|password|passwd|api-?key|access-?key|auth|credential)s?[a-z0-9-]*)"
+            r"(=|\s+)(?:\"[^\"]*\"|'[^']*'|[^\s-]\S*)"
+        ),
+        r"\1\2" + _REDACTED,
+    ),
+    # Well-known token shapes
+    (
+        re.compile(
+            r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,}"
+            r"|sk-[A-Za-z0-9_-]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35})\b"
+        ),
+        _REDACTED,
+    ),
+    # Long opaque high-entropy-looking runs (>=32 chars, no path separators)
+    (re.compile(r"(?<![A-Za-z0-9_\-/.])[A-Za-z0-9_\-+=]{32,}(?![A-Za-z0-9_\-/.])"), _REDACTED),
+)
+_DETAIL_MAX = 200
+
+
+def redact_command(command: str, max_len: int = _DETAIL_MAX) -> str:
+    """Best-effort redaction of secret-looking substrings, then truncate.
+
+    Terminal findings keep a short command excerpt as evidence in the local
+    receipt ledger. This strips obvious credentials (URL userinfo, bearer/
+    Authorization values, *_TOKEN/*PASSWORD= env assignments, --token/--password
+    flags, well-known token prefixes, long opaque strings). It is heuristic —
+    novel secret formats can survive; README discloses that.
+    """
+    text = (command or "").strip()
+    for pattern, repl in _REDACT_PATTERNS:
+        text = pattern.sub(repl, text)
+    if len(text) > max_len:
+        text = text[: max_len - 1] + "…"
+    return text
+
+
 def detect_command_weakenings(command: str) -> list[Finding]:
     """Inspect a shell / terminal command string."""
     findings: list[Finding] = []
@@ -84,7 +138,7 @@ def detect_command_weakenings(command: str) -> list[Finding]:
                     message=message,
                     severity=Severity.CRITICAL,
                     path="<command>",
-                    detail=cmd.strip()[:300],
+                    detail=redact_command(cmd),
                 )
             )
     return findings

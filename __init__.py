@@ -18,10 +18,12 @@ if __package__:
     from .proveit_tests.hooks.cron import ContextCronProbe
     from .proveit_tests.hooks.runtime import ProveItRuntime
     from .proveit_tests.modes import resolve_mode
+    from .proveit_tests.receipts.ledger import resolve_ledger_dir
 else:  # pragma: no cover - pytest imports the rootdir __init__.py top-level
     from proveit_tests.hooks.cron import ContextCronProbe
     from proveit_tests.hooks.runtime import ProveItRuntime
     from proveit_tests.modes import resolve_mode
+    from proveit_tests.receipts.ledger import resolve_ledger_dir
 
 __version__ = "0.1.0"
 
@@ -59,11 +61,8 @@ def _settings(ctx: Any) -> dict[str, Any]:
     return {}
 
 
-def _ledger_dir(ctx: Any, settings: dict[str, Any]) -> str | None:
-    override = str(settings.get("receipt_dir") or "").strip()
-    if override:
-        return override
-    # Sanctioned Hermes durable-state root: <HERMES_HOME>/plugin-data/<name>/
+def _plugin_data_root(ctx: Any) -> str | None:
+    """Sanctioned Hermes durable-state root: <HERMES_HOME>/plugin-data/<name>/."""
     try:
         from plugins.plugin_storage import plugin_data_dir  # type: ignore[import-not-found]
 
@@ -74,12 +73,26 @@ def _ledger_dir(ctx: Any, settings: dict[str, Any]) -> str | None:
         fn = getattr(ctx, name, None)
         if callable(fn):
             try:
-                return str(fn())
+                val = fn()
             except Exception:
-                pass
+                continue
+            if val:
+                return str(val)
         elif isinstance(fn, str) and fn:
             return fn
     return None
+
+
+def _ledger_dir(ctx: Any, settings: dict[str, Any]) -> str | None:
+    """Resolve the ledger directory, confined to the Hermes plugin data dir.
+
+    ``receipt_dir`` is only honored as a *relative* subdirectory of the plugin
+    data dir. Absolute paths, ``~`` paths, or anything that resolves outside the
+    root (``..``, symlinks) are rejected with a warning and the root is used.
+    With no plugin data dir available we return None, which the runtime treats
+    as an in-memory, non-persistent ledger (fail closed — never /tmp).
+    """
+    return resolve_ledger_dir(_plugin_data_root(ctx), settings.get("receipt_dir"))
 
 
 def _get_runtime() -> ProveItRuntime:

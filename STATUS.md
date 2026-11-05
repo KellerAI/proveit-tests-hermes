@@ -28,6 +28,8 @@ proveit-tests-hermes/
 ├── tests/                   # pure-Python pytest (no Hermes) + mock PluginContext
 ├── corpus/{cheats,legit}/   # adversarial + legit-refactor FP controls
 ├── demo/tiny-repo/          # <90s synthetic fixture
+├── demo/recordings/         # no-spend recording (mp4/gif/cast; SHA-256 in DEMO.md)
+├── .demo-harness/           # demo-only scripted harness (not plugin runtime; hidden dir so validate skips it)
 └── drafts/                  # x-post, form-answers, catalog-entry.yaml (held)
 ```
 
@@ -42,14 +44,17 @@ proveit-tests-hermes/
 | Modes observe / escalate / unattended + `rule_key` | done |
 | SHA-256 receipt ledger | done |
 | Expanded adversarial corpus + legit FP controls | done |
-| Pure-Python pytest | **87 passed / 0 failed** |
-| Coverage (`proveit_tests`) | **95%** (736 stmts, 40 miss) |
+| Pure-Python pytest | **103 passed / 0 failed** |
+| Coverage (`proveit_tests`) | **95%** (780 stmts, 39 miss) |
 | Mock Hermes PluginContext integration tests | done; plus real-loader + real-surface tests from v0.22.7 source |
 | Net-new weakening semantics (breaker P0) | done: pre-existing skips/tautologies not blamed on an edit; regression tests |
 | Honest footer (breaker P1) | done: `K open weakening(s) · receipt … · last test run seen: <real pytest summary>` |
 | README + rule-13 disclosures | done (contest copy scrubbed; no client material) |
+| Peter rule-13 should-fixes | done: `receipt_dir` confined under plugin data dir (abs/`~`/`..`/symlink rejected); no `/tmp` fallback (in-memory ledger + warning); ledger dir 0700 / file 0600; terminal command excerpt secret-redacted (≤200 chars) + README disclosure |
 | DEMO.md + tiny-repo fixture | done |
 | drafts (X / form / catalog-entry) | done (placeholders; held) |
+| Gate 2 | **CLOSED for evidence**: Andrej / Peter / Steve PASS. `artifacts/` kept tracked until Gate 2 formally closes (Boris); chair re-ignores later |
+| Steve pre-public items | done: README "does not guarantee" reworded (absence of findings ≠ proof tests were preserved; "catches" → "flags" in README/plugin.yaml/drafts); portable harness in `.demo-harness/` with relative paths + SHA-256 for recordings/harness in DEMO.md; no rule-9 warning |
 | `hermes plugins validate/doctor` | **done (Gate 2)**: Hermes v0.22.7 throwaway; validate exit 0, doctor exit 0 (`artifacts/gate2-*.txt`) |
 | Recorded synthetic demo | **done, no-spend**: real Hermes runtime, scripted agent, 55 s (`demo/recordings/`) |
 | Live model-driven demo beat | **gated**: Gate 5 (provider spend) |

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import time
 from dataclasses import asdict, dataclass, field
@@ -16,6 +17,52 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from ..findings import Finding
+
+log = logging.getLogger("proveit_tests.ledger")
+
+
+def resolve_ledger_dir(root: str | Path | None, override: Any = None) -> str | None:
+    """Confine an optional ``receipt_dir`` override to under ``root``.
+
+    - ``root`` None -> None (caller runs an in-memory ledger; never /tmp).
+    - empty override -> ``root``.
+    - override must be a relative path that resolves inside ``root``; absolute,
+      ``~``-prefixed, or escaping (``..`` / symlink) overrides are rejected with
+      a warning and ``root`` is used instead.
+    """
+    ov = str(override or "").strip()
+    if root is None or str(root).strip() == "":
+        if ov:
+            log.warning(
+                "proveit-tests: receipt_dir=%r ignored: no Hermes plugin data dir; "
+                "ledger is in-memory only",
+                ov,
+            )
+        return None
+    base = Path(root).expanduser()
+    if not ov:
+        return str(base)
+    cand = Path(ov)
+    if cand.is_absolute() or ov.startswith("~"):
+        log.warning(
+            "proveit-tests: receipt_dir=%r rejected (must be relative to the plugin "
+            "data dir); using %s",
+            ov,
+            base,
+        )
+        return str(base)
+    base_r = base.resolve()
+    target = (base_r / cand).resolve()
+    try:
+        target.relative_to(base_r)
+    except ValueError:
+        log.warning(
+            "proveit-tests: receipt_dir=%r escapes the plugin data dir; using %s",
+            ov,
+            base,
+        )
+        return str(base)
+    return str(target)
 
 
 def sha256(text: str) -> str:
@@ -90,17 +137,28 @@ def build_receipt(
 
 
 class Ledger:
-    """Append-only JSONL ledger on disk."""
+    """Append-only JSONL ledger on disk, or in-memory when ``directory`` is None.
 
-    def __init__(self, directory: str | Path):
-        self.directory = Path(directory)
-        self.directory.mkdir(parents=True, exist_ok=True)
-        self.path = self.directory / "receipts.jsonl"
+    On disk the directory is created 0700 and the file 0600 (owner-only).
+    """
+
+    def __init__(self, directory: str | Path | None):
         self._memory: list[Receipt] = []
+        self.directory: Path | None = None
+        self.path: Path | None = None
+        if directory is None:
+            return
+        self.directory = Path(directory)
+        self.directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.path = self.directory / "receipts.jsonl"
         self._load()
 
+    @property
+    def persistent(self) -> bool:
+        return self.path is not None
+
     def _load(self) -> None:
-        if not self.path.exists():
+        if self.path is None or not self.path.exists():
             return
         try:
             for line in self.path.read_text(encoding="utf-8").splitlines():
@@ -126,7 +184,10 @@ class Ledger:
 
     def append(self, receipt: Receipt) -> Receipt:
         self._memory.append(receipt)
-        with self.path.open("a", encoding="utf-8") as fh:
+        if self.path is None:
+            return receipt
+        fd = os.open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        with os.fdopen(fd, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(receipt.to_dict(), sort_keys=True) + "\n")
             fh.flush()
             try:
@@ -161,9 +222,10 @@ class Ledger:
         return out
 
     def summary_text(self) -> str:
+        note = "" if self.persistent else " [in-memory only: no Hermes plugin data dir; not persisted]"
         if not self._memory:
-            return "ProveIt ledger empty — no weakenings recorded this session."
-        lines = [f"ProveIt ledger ({len(self._memory)} receipt(s)):"]
+            return "ProveIt ledger empty — no weakenings recorded this session." + note
+        lines = [f"ProveIt ledger ({len(self._memory)} receipt(s)):{note}"]
         for r in self._memory[-20:]:
             kinds = sorted({f.get("kind", "?") for f in r.findings if not f.get("waived")})
             lines.append(

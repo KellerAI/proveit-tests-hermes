@@ -35,8 +35,8 @@ on the next tool call / transform_tool_result and document that in STATUS.md.
 
 from __future__ import annotations
 
+import logging
 import os
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -116,7 +116,12 @@ class ProveItRuntime:
         self.one_shot_nudge = one_shot_nudge
         self.session_id = session_id
         if ledger_dir is None:
-            ledger_dir = Path(tempfile.gettempdir()) / "proveit-tests-ledger"
+            # Fail closed: no sanctioned plugin data dir -> in-memory ledger,
+            # never a shared temp dir.
+            logging.getLogger("proveit_tests.ledger").warning(
+                "proveit-tests: no Hermes plugin data dir; receipt ledger is "
+                "in-memory only and will not persist"
+            )
         self.ledger = Ledger(ledger_dir)
         self._pending_warnings: list[str] = []
         self._unexplained: list[Finding] = []

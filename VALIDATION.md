@@ -79,7 +79,7 @@ registration passed · registrations: 0 tool(s), 6 hook(s)`.
 
 ## Real runtime, no model (Gate 2 demo)
 
-`/workspace/hermes-hackathon-launch/demo-harness/real_hermes_demo.py` drives Hermes' real dispatcher
+`.demo-harness/real_hermes_demo.py` (in this repo; demo-only, see DEMO.md) drives Hermes' real dispatcher
 (`model_tools.handle_function_call`) with the plugin installed into the throwaway profile via
 `hermes plugins install file://…/proveit-tests-hermes --ref <sha>`, with `mode: escalate` set through `hermes config set`.
 It observed:

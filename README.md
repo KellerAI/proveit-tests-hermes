@@ -1,12 +1,12 @@
 # ProveIt Tests for Hermes
 
-A native [Hermes Agent](https://hermes-agent.nousresearch.com/) plugin that catches an agent **weakening tests** to reach green.
+A native [Hermes Agent](https://hermes-agent.nousresearch.com/) plugin that flags recognizable ways an agent **weakens tests** to reach green.
 
 Deterministic (Python AST + regex). No LLM calls. Complements core verify-on-stop and claim-vs-evidence plugins — those check that tests *ran* or that *claims* match tool evidence; this checks whether the tests still *test* anything.
 
 > **Language coverage:** Python-strong. JS/TS detectors are **heuristic and limited** (regex over `it`/`test`/`expect`/`skip`/`only`). Do not treat JS/TS results as complete.
 
-## What it catches
+## What it flags
 
 Edits to test files and test-runner / CI commands. Findings are **net-new**: each edit is
 compared with the file as it was before that edit, and a skip, `assert True`, tautology or
@@ -72,7 +72,7 @@ Settings under `plugins.entries.proveit-tests.settings` (also the Desktop settin
 | `mode` | `observe` | `observe` \| `escalate` \| `block_unattended` |
 | `test_path_globs` | `test_*.py`, `*_test.py`, `tests/**`, `*.test.js/ts`, `*.spec.js/ts`, `__tests__/**` | Paths treated as tests |
 | `ci_path_globs` | `.github/workflows/**`, `.gitlab-ci.yml`, … | CI configs watched for soft-fail flags |
-| `receipt_dir` | plugin data dir | Override receipt ledger location |
+| `receipt_dir` | `""` (plugin data dir) | Optional **relative** subdirectory under the Hermes plugin data dir. Absolute, `~`, or escaping (`..`/symlink) values are rejected with a warning and the plugin data dir is used |
 | `one_shot_nudge` | `true` | `pre_verify` continues once when weakenings remain |
 
 ## Security disclosure (catalog rule 13)
@@ -81,7 +81,9 @@ Settings under `plugins.entries.proveit-tests.settings` (also the Desktop settin
 - Reads the **existing file on disk** and the **proposed content / command in tool args** to compare before/after for `write_file` / `patch` / terminal tools.
 - May **append warnings** into tool results (`transform_tool_result`).
 - May **escalate or block** tool calls when mode is not `observe`.
-- Writes a **SHA-256 receipt ledger** under the plugin data directory.
+- Writes a **SHA-256 receipt ledger** (`receipts.jsonl`, dir `0700`, file `0600`) only under the Hermes plugin data directory (`$HERMES_HOME/plugin-data/proveit-tests/`). `receipt_dir` can only pick a subdirectory inside it; it cannot point the ledger elsewhere.
+- If Hermes provides no plugin data directory, the ledger **fails closed to in-memory only** (logged warning; `/proveit` says "in-memory only") — nothing is written to `/tmp` or any other shared location.
+- **Terminal findings may retain a short excerpt of the command text locally** (≤200 chars) in that ledger as evidence. Secret-looking substrings (URL credentials, `Authorization`/bearer values, `*_TOKEN=`/`*PASSWORD=`-style env assignments, `--token`/`--password`/`--api-key` flags, common token prefixes like `ghp_`/`sk-`/`AKIA`, long opaque strings) are redacted first. Redaction is best-effort: an unusual secret format can survive, so avoid inlining credentials in test commands.
 - **Not a sandbox and not unbypassable.** An agent can still rewrite files via novel shell indirections, edit outside watched globs, disable the plugin, or invent new weakenings. Treat findings as signals, not proof of malice or of safety.
 
 ## Hook feasibility (honest)
@@ -101,7 +103,7 @@ If a future Hermes build stops putting file contents in write/patch args, pre-ed
 
 - Not a substitute for code review, CI, or a security audit.
 - Does not certify HIPAA, SOC2, or any compliance regime.
-- Does not prove tests are *good* — only that common weakenings were not just introduced.
+- Flags selected, recognizable weakening patterns in edits and commands it observes; absence of findings is not proof that tests were preserved, and does not prove tests are *good*.
 - JS/TS coverage is incomplete by design in v0.1.
 
 ## Development (no Hermes required)
