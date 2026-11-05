@@ -3,7 +3,9 @@
 Catches an agent weakening tests to get to green. Deterministic AST + regex.
 No LLM. Not unbypassable.
 
-register(ctx) is the Hermes entry point. Pure-Python unit tests import
+register(ctx) is the Hermes entry point. Hermes loads this directory as a
+package (``submodule_search_locations=[plugin_dir]``) without putting it on
+``sys.path``, so imports here must be relative. Pure-Python unit tests import
 proveit_tests.* directly and do not need Hermes installed.
 """
 
@@ -11,9 +13,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from proveit_tests.hooks.cron import ContextCronProbe
-from proveit_tests.hooks.runtime import ProveItRuntime
-from proveit_tests.modes import resolve_mode
+if __package__:
+    # Hermes plugin loader: loaded as a package, plugin dir NOT on sys.path.
+    from .proveit_tests.hooks.cron import ContextCronProbe
+    from .proveit_tests.hooks.runtime import ProveItRuntime
+    from .proveit_tests.modes import resolve_mode
+else:  # pragma: no cover - pytest imports the rootdir __init__.py top-level
+    from proveit_tests.hooks.cron import ContextCronProbe
+    from proveit_tests.hooks.runtime import ProveItRuntime
+    from proveit_tests.modes import resolve_mode
 
 __version__ = "0.1.0"
 

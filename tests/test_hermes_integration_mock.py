@@ -14,13 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _load_plugin():
-    spec = importlib.util.spec_from_file_location(
-        "proveit_tests_plugin_integration", ROOT / "__init__.py"
-    )
-    plugin = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(plugin)
-    return plugin
+    from conftest import load_plugin_like_hermes
+
+    return load_plugin_like_hermes("proveit_tests_plugin_integration")
 
 
 class MockHermesCtx:

@@ -35,9 +35,9 @@ def test_register_wires_expected_hooks():
     # The plugin __init__.py lives at package root; import via importlib
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("proveit_tests_plugin", root / "__init__.py")
-    plugin = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(plugin)
+    from conftest import load_plugin_like_hermes
+
+    plugin = load_plugin_like_hermes("proveit_tests_plugin")
 
     ctx = FakeCtx()
     plugin.register(ctx)
