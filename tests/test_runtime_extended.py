@@ -70,21 +70,35 @@ def test_str_replace_style_args(tmp_path):
 
 def test_post_tool_terminal_redirect(tmp_path):
     path = tmp_path / "test_x.py"
+    path.write_text("def test_a():\n    assert add(1, 1) == 2\n", encoding="utf-8")
+    rt = ProveItRuntime(mode=Mode.OBSERVE, ledger_dir=tmp_path)
+    args = {"command": f"cat > {path} <<'EOF'\ndef test_a():\n    assert True\nEOF"}
+    rt.on_pre_tool_call("terminal", args=args)
+    path.write_text("def test_a():\n    assert True\n", encoding="utf-8")
+    rt.on_post_tool_call("terminal", args=args, result="ok")
+    assert any(f.kind == "assert-true" for f in rt._unexplained)
+
+
+def test_post_tool_terminal_untouched_preexisting_weakness_not_flagged(tmp_path):
+    path = tmp_path / "test_x.py"
     path.write_text("def test_a():\n    assert True\n", encoding="utf-8")
     rt = ProveItRuntime(mode=Mode.OBSERVE, ledger_dir=tmp_path)
-    rt.on_post_tool_call(
-        "terminal",
-        args={"command": f"cat > {path}"},
-        result="ok",
-    )
-    assert rt._pending_warnings or rt._unexplained
+    args = {"command": f"python -m pytest {path}"}
+    rt.on_pre_tool_call("terminal", args=args)
+    rt.on_post_tool_call("terminal", args=args, result="1 passed in 0.01s")
+    assert not rt._unexplained and not rt._pending_warnings
 
 
-def test_footer_line(tmp_path):
+def test_footer_line_reports_only_observed_counts(tmp_path):
     rt = ProveItRuntime(mode=Mode.OBSERVE, ledger_dir=tmp_path)
-    line = rt.footer_line(tests_passed=3)
-    assert "3 passed" in line
-    assert "receipt" in line
+    line = rt.footer_line()
+    assert "passed" not in line  # no test run seen → no invented count
+    assert "0 open weakening(s)" in line and "receipt" in line
+    rt.on_post_tool_call(
+        "terminal", args={"command": "python -m pytest -q"},
+        result="F..\n=== 1 failed, 2 passed in 0.05s ===",
+    )
+    assert rt.footer_line().endswith("last test run seen: 1 failed, 2 passed")
 
 
 def test_one_shot_disabled(tmp_path):

@@ -109,3 +109,42 @@ def test_stronger_assert_ok():
         path="test_total.py",
     )
     assert not any(x.kind == "removed-assert" for x in f)
+
+
+# --- Net-new semantics (Andrej breaker P0, 2026-11-05) ----------------------
+
+_PRE_SKIP = (
+    "import pytest\n\n"
+    "@pytest.mark.skip(reason='flaky upstream')\n"
+    "def test_old():\n    assert 1 == 1\n\n"
+    "def test_b():\n    assert 2 == 2\n"
+)
+
+
+def test_identical_old_new_with_preexisting_skip_not_flagged():
+    assert [f for f in detect_python_diff(_PRE_SKIP, _PRE_SKIP, path="test_x.py") if not f.waived] == []
+
+
+def test_unrelated_edit_keeps_preexisting_skip_unflagged():
+    new = _PRE_SKIP.replace("def test_b():\n    assert 2 == 2\n", "def test_b():\n    assert 2 == 2\n    assert add(1, 2) == 3\n")
+    new = "# header comment\n" + new  # shifts every line number
+    assert [f.kind for f in detect_python_diff(_PRE_SKIP, new, path="test_x.py")] == []
+
+
+def test_newly_added_skip_is_flagged():
+    new = _PRE_SKIP.replace("def test_b():", "@pytest.mark.skip\ndef test_b():")
+    kinds = [f.kind for f in detect_python_diff(_PRE_SKIP, new, path="test_x.py")]
+    assert kinds.count("skip-or-xfail") == 1
+
+
+def test_preexisting_assert_true_and_tautology_not_flagged_but_new_one_is():
+    old = "def test_a():\n    assert True\n\ndef test_b():\n    x = 1\n    assert x == x\n"
+    assert detect_python_diff(old, old, path="test_x.py") == []
+    new = old + "\ndef test_c():\n    assert True\n"
+    kinds = [f.kind for f in detect_python_diff(old, new, path="test_x.py")]
+    assert kinds == ["assert-true"]
+
+
+def test_new_file_everything_is_new():
+    kinds = {f.kind for f in detect_python_diff("", _PRE_SKIP, path="test_x.py")}
+    assert "skip-or-xfail" in kinds

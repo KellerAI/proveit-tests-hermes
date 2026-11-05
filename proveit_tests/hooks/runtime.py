@@ -51,6 +51,13 @@ from .cron import CronProbe, NullCronProbe
 
 WRITE_TOOLS = {"write_file", "write", "create_file", "str_replace_editor"}
 PATCH_TOOLS = {"patch", "apply_patch", "edit_file", "str_replace"}
+import re as _re
+
+# pytest's final summary, e.g. "==== 3 passed, 1 failed in 0.12s ====" or "1 failed in 0.03s"
+_PYTEST_SUMMARY = _re.compile(
+    r"(\d+ (?:passed|failed|error|errors|skipped|xfailed|xpassed)(?:, \d+ (?:passed|failed|error|errors|skipped|xfailed|xpassed|warnings?|deselected))*) in [\d.]+s"
+)
+
 TERMINAL_TOOLS = {"terminal", "shell", "shell_exec", "run_terminal_cmd", "bash", "execute"}
 
 
@@ -115,6 +122,12 @@ class ProveItRuntime:
         self._unexplained: list[Finding] = []
         self._nudged = False
         self._last_receipt_digest = ""
+        # path -> file content before the in-flight edit (None = unknown)
+        self._snapshots: dict[str, str] = {}
+        # paths whose edit was fully analyzed pre-edit (content in args)
+        self._pre_analyzed: set[str] = set()
+        # last test-runner summary seen in a terminal tool result, e.g. "3 passed, 1 failed"
+        self.last_test_summary: str = ""
 
     # ------------------------------------------------------------------ analyze
     def analyze_file_change(self, path: str, old: str, new: str) -> list[Finding]:
@@ -191,12 +204,17 @@ class ProveItRuntime:
             cmd = _extract_command(args)
             if cmd:
                 findings.extend(self.analyze_command(cmd))
+                # Snapshot watched files the command names, so post_tool_call can
+                # diff against real prior content instead of guessing.
+                for token in self._watched_tokens(cmd):
+                    self._snapshots.setdefault(token, _read_disk(token))
 
         if tool in WRITE_TOOLS | PATCH_TOOLS or tool in {"write_file", "patch"}:
             path = _extract_path(args)
             if path and (is_test_path(path, self.test_globs) or is_ci_path(path, self.ci_globs)):
                 new = _extract_content(args)
                 old = _read_disk(path)
+                self._snapshots[path] = old
                 if "old_string" in args and "new_string" in args and old:
                     # Hermes core `patch` tool (replace mode): old_string/new_string[, replace_all]
                     count = -1 if args.get("replace_all") else 1
@@ -205,12 +223,21 @@ class ProveItRuntime:
                     # str_replace-style editors: synthesize new content
                     new = old.replace(str(args.get("old_str", "")), str(args.get("new_str", "")), 1)
                 if new is not None:
+                    self._pre_analyzed.add(path)
                     findings.extend(self.analyze_file_change(path, old, new))
-                # else: content not in args — post-edit path will catch it
+                # else: content not in args — post_tool_call diffs disk vs snapshot
 
         if not findings:
             return None
         return self.decide(findings)
+
+    def _watched_tokens(self, cmd: str) -> list[str]:
+        out = []
+        for token in cmd.replace(">", " ").replace("|", " ").replace(";", " ").split():
+            token = token.strip("'\"")
+            if token and (is_test_path(token, self.test_globs) or is_ci_path(token, self.ci_globs)):
+                out.append(token)
+        return out
 
     def on_post_tool_call(
         self,
@@ -219,40 +246,50 @@ class ProveItRuntime:
         result: str = "",
         **kwargs: Any,
     ) -> None:
-        """Re-scan disk after write tools when pre-edit content was unavailable."""
+        """Diff disk against the pre-edit snapshot when pre-edit content was unavailable.
+
+        Only edits with a known prior version are analyzed, so findings are
+        attributable to this edit. No snapshot (prior content unknown) → no claim.
+        """
         args = args or {}
         tool = (tool_name or "").strip()
-        if tool not in WRITE_TOOLS | PATCH_TOOLS and tool not in {"write_file", "patch"}:
-            # Also re-check if terminal may have rewritten a test file
-            if tool in TERMINAL_TOOLS or tool.endswith("terminal"):
-                cmd = _extract_command(args)
-                # cheap path extraction from redirection targets
-                for token in cmd.replace(">", " ").replace("|", " ").split():
-                    if is_test_path(token, self.test_globs) or is_ci_path(token, self.ci_globs):
-                        new = _read_disk(token)
-                        if new:
-                            # Without old content we only run absolute checks via empty old
-                            findings = self.analyze_file_change(token, "", new)
-                            open_f = [f for f in findings if not f.waived]
-                            if open_f:
-                                self.decide(findings)
+        if tool in TERMINAL_TOOLS or tool.endswith("terminal"):
+            self._note_test_summary(result)
+            cmd = _extract_command(args)
+            for token in self._watched_tokens(cmd):
+                old = self._snapshots.pop(token, None)
+                if old is None:
+                    continue
+                new = _read_disk(token)
+                if new != old:
+                    findings = self.analyze_file_change(token, old, new)
+                    if [f for f in findings if not f.waived]:
+                        self.decide(findings)
+            return
+        if tool not in WRITE_TOOLS | PATCH_TOOLS:
             return
 
         path = _extract_path(args)
         if not path:
             return
-        if not (is_test_path(path, self.test_globs) or is_ci_path(path, self.ci_globs)):
+        old = self._snapshots.pop(path, None)
+        if path in self._pre_analyzed:
+            self._pre_analyzed.discard(path)
             return
-        # If we already had content in pre, skip duplicate unless disk differs — keep simple:
-        # only run when no pending warning for this path
-        if any(path in w for w in self._pending_warnings):
+        if old is None:
             return
         new = _read_disk(path)
-        if not new:
+        if new == old:
             return
-        findings = self.analyze_file_change(path, "", new)
+        findings = self.analyze_file_change(path, old, new)
         if findings:
             self.decide(findings)
+
+    def _note_test_summary(self, result: Any) -> None:
+        text = result if isinstance(result, str) else str(result or "")
+        m = _PYTEST_SUMMARY.findall(text)
+        if m:
+            self.last_test_summary = m[-1].strip()
 
     def on_transform_tool_result(
         self,
@@ -266,8 +303,7 @@ class ProveItRuntime:
         warning = self._pending_warnings.pop(0)
         footer = ""
         if self._last_receipt_digest:
-            open_n = len([f for f in self._unexplained if not f.waived])
-            footer = f"\n\n[ProveIt] Tests: ? passed / {open_n} weakened · receipt {self._last_receipt_digest[:12]}"
+            footer = "\n\n[ProveIt] " + self.footer_line()
         base = result if isinstance(result, str) else str(result)
         return f"{base}\n\n⚠️ {warning}{footer}"
 
@@ -296,8 +332,12 @@ class ProveItRuntime:
     def slash_proveit(self, args_raw: str = "") -> str:
         return self.ledger.summary_text()
 
-    def footer_line(self, tests_passed: int | None = None) -> str:
+    def footer_line(self) -> str:
+        """`K open weakening(s) · receipt <hash>`, plus the last test-runner summary
+        actually seen in a terminal result (never an invented pass count)."""
         open_n = len([f for f in self._unexplained if not f.waived])
         digest = self._last_receipt_digest[:12] if self._last_receipt_digest else "none"
-        passed = str(tests_passed) if tests_passed is not None else "?"
-        return f"Tests: {passed} passed / {open_n} weakened · receipt {digest}"
+        line = f"{open_n} open weakening(s) · receipt {digest}"
+        if self.last_test_summary:
+            line += f" · last test run seen: {self.last_test_summary}"
+        return line

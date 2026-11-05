@@ -5,7 +5,9 @@ description: >-
   skip/xfail/.only, deleted tests, expected literals rewritten to match failing
   output, assert True / tautologies, try/except pass wrappers, and test-runner
   escape hatches (pytest || true, -k "not …", --deselect, --passWithNoTests,
-  CI continue-on-error). Deterministic AST + regex — no LLM. Modes: observe
+  CI continue-on-error). Net-new only: each edit is compared with the file
+  as it was before, so pre-existing skips are not blamed on the edit.
+  Deterministic AST + regex — no LLM. Modes: observe
   (default), escalate to the human-approval gate, or block on unattended/cron
   runs. Durable SHA-256 receipts and a /proveit ledger. Python-strong;
   JS/TS coverage is heuristic and limited. Disclosure (rule 13): local-only,

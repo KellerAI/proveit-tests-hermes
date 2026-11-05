@@ -152,15 +152,26 @@ def test_post_tool_call_rescans_disk_when_content_missing(tmp_path):
     ctx = MockHermesCtx({"mode": "observe"}, data_dir=tmp_path)
     plugin.register(ctx)
     path = tmp_path / "test_x.py"
-    # Agent wrote via a tool that did not put content in args; disk already weak
+    path.write_text("def test_a():\n    assert add(1, 1) == 2\n", encoding="utf-8")
+    # Tool call did not carry the content in args: pre_tool_call snapshots disk...
+    assert ctx.hooks["pre_tool_call"][0]("write_file", {"path": str(path)}) is None
+    # ...the tool weakens the file...
     path.write_text("def test_a():\n    assert True\n", encoding="utf-8")
-    post = ctx.hooks["post_tool_call"][0]
-    post("write_file", {"path": str(path)}, result="ok", duration_ms=3)
-    out = ctx.hooks["transform_tool_result"][0](
-        "write_file", {"path": str(path)}, result="ok"
-    )
-    assert out is not None
-    assert "ProveIt" in out
+    # ...and post_tool_call diffs disk against the snapshot.
+    ctx.hooks["post_tool_call"][0]("write_file", {"path": str(path)}, result="ok", duration_ms=3)
+    out = ctx.hooks["transform_tool_result"][0]("write_file", {"path": str(path)}, result="ok")
+    assert out is not None and "ProveIt" in out and "assert-true" in out
+
+
+def test_post_tool_call_without_snapshot_makes_no_claim(tmp_path):
+    """Prior content unknown → the edit cannot be blamed for what is on disk."""
+    plugin = _load_plugin()
+    ctx = MockHermesCtx({"mode": "observe"}, data_dir=tmp_path)
+    plugin.register(ctx)
+    path = tmp_path / "test_x.py"
+    path.write_text("def test_a():\n    assert True\n", encoding="utf-8")
+    ctx.hooks["post_tool_call"][0]("write_file", {"path": str(path)}, result="ok")
+    assert ctx.hooks["transform_tool_result"][0]("write_file", {"path": str(path)}, result="ok") is None
 
 
 def test_gate2_still_required_note():

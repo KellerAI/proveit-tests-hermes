@@ -8,7 +8,10 @@ Deterministic (Python AST + regex). No LLM calls. Complements core verify-on-sto
 
 ## What it catches
 
-Edits to test files and test-runner / CI commands:
+Edits to test files and test-runner / CI commands. Findings are **net-new**: each edit is
+compared with the file as it was before that edit, and a skip, `assert True`, tautology or
+empty catch that was already there is not attributed to the edit. A brand-new test file
+counts as all-new. When the prior content is unknown, no claim is made.
 
 | Pattern | Example |
 |---|---|
@@ -29,7 +32,10 @@ Edits to test files and test-runner / CI commands:
 | `escalate` | `pre_tool_call` returns `{"action":"approve","rule_key":"proveit-tests:test-weakening"}` → Hermes human-approval gate. Blocks on cron/unattended. |
 | `block_unattended` | Blocks when `ctx.current_cron_execution()` is set; otherwise escalates (same `rule_key`). |
 
-At turn end, `pre_verify` can nudge once if unexplained weakenings remain. `/proveit` prints the session receipt ledger. Footer shape: `Tests: N passed / K weakened · receipt <hash>`.
+At turn end, `pre_verify` can nudge once if unexplained weakenings remain. `/proveit` prints the session receipt ledger. Warnings appended to tool results end with a footer like
+`[ProveIt] 1 open weakening(s) · receipt 3f9c1a2b4d5e · last test run seen: 1 failed`. The
+"last test run seen" part appears only when a pytest summary was actually seen in a terminal tool
+result; the plugin never invents a pass count.
 
 Inline waiver (logged, not silent):
 
@@ -48,11 +54,11 @@ hermes plugins install proveit-tests
 hermes plugins enable proveit-tests
 ```
 
-From a local checkout (development):
+From a local git checkout (development; `install` takes a Git URL, so pin a commit):
 
 ```bash
-hermes plugins install /path/to/proveit-tests-hermes
-hermes plugins enable proveit-tests
+hermes plugins install file:///path/to/proveit-tests-hermes --ref <40-char-commit-sha> --enable
+hermes config set plugins.entries.proveit-tests.settings.mode escalate   # optional
 ```
 
 Requires Hermes `>=0.22.7`.
@@ -84,7 +90,7 @@ Settings under `plugins.entries.proveit-tests.settings` (also the Desktop settin
 |---|---|---|
 | `pre_tool_call` on `write_file` / `patch` | Proposed content in `args` + current disk file | Pre-edit observe / escalate / block |
 | `pre_tool_call` on `terminal` | Command string only | Escape-hatch command detectors; not full AST of files rewritten via shell |
-| `post_tool_call` | Re-read disk after writes / likely redirections | Post-edit observe when pre-edit content was missing |
+| `post_tool_call` | Disk after the tool vs a snapshot taken in `pre_tool_call` (write/patch without content in args, or a terminal command naming a watched test/CI path) | Post-edit observe; no snapshot → no claim |
 | `transform_tool_result` | Append warning the model sees | Observe mode |
 | `pre_verify` | `changed_paths`, one-shot continue | Nudge to restore or waive |
 | `current_cron_execution()` | Unattended/cron detection | Fail closed in escalate / block_unattended |
@@ -107,8 +113,10 @@ python3 -m venv .venv && .venv/bin/pip install pytest pytest-cov
 
 Golden corpus under `corpus/cheats/` (must flag) and `corpus/legit/` (false-positive control:
 extract-to-helper, rename test, reformat, type hints, `# proveit: intended` waivers).
-Mock Hermes PluginContext integration tests live in `tests/test_hermes_integration_mock.py`
-(pure Python — real `hermes plugins validate`/`doctor` still needs Gate 2).
+Mock Hermes PluginContext integration tests live in `tests/test_hermes_integration_mock.py`;
+`tests/test_hermes_loader_isolation.py` and `tests/test_hermes_real_surface.py` pin the loader and
+`ctx.get_config` / `patch` shapes of Hermes v0.22.7. Real `hermes plugins validate` / `doctor`
+results are in `VALIDATION.md`.
 
 ## License
 

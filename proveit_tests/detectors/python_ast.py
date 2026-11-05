@@ -11,6 +11,7 @@ import re
 from typing import Any
 
 from ..findings import Finding, Severity
+from .netnew import net_new
 from .waivers import apply_waivers
 
 _TEST_NAME = re.compile(r"^(test_|Test)")
@@ -273,8 +274,17 @@ def detect_python_source(source: str, path: str = "") -> list[Finding]:
 
 
 def detect_python_diff(old: str, new: str, path: str = "") -> list[Finding]:
-    """Diff-aware checks between previous and proposed test file contents."""
-    findings = detect_python_source(new, path=path)
+    """Diff-aware checks between previous and proposed test file contents.
+
+    Presence-style findings (skip/xfail, assert True, tautology, try/except
+    pass, assertionless test, syntax error) are reported only when they are
+    net-new versus ``old``: a weakening that already existed before the edit is
+    not attributed to the edit. ``old == ""`` means the file is new, so every
+    finding in it is new. Callers that do not know the prior content must not
+    call this (see ProveItRuntime snapshots).
+    """
+    old_abs = detect_python_source(old, path=path) if old.strip() else []
+    findings = net_new(old_abs, old, detect_python_source(new, path=path), new)
 
     old_tree = _parse(old) if old.strip() else None
     new_tree = _parse(new)
@@ -355,15 +365,8 @@ def detect_python_diff(old: str, new: str, path: str = "") -> list[Finding]:
                     )
                 )
 
-        # Newly added skip/xfail vs old
-        if isinstance(new_node, (ast.FunctionDef, ast.AsyncFunctionDef)) and isinstance(
-            old_node, (ast.FunctionDef, ast.AsyncFunctionDef)
-        ):
-            old_skips = set(_has_skip_or_xfail(_decorator_names(old_node)))
-            new_skips = set(_has_skip_or_xfail(_decorator_names(new_node)))
-            for s in sorted(new_skips - old_skips):
-                # already flagged by absolute check; keep one with diff context
-                pass
+        # Newly added skip/xfail is covered by net_new() above (pre-existing
+        # skips are subtracted; a skip added in this edit stays).
 
     return apply_waivers(findings, new)
 

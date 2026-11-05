@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 
 from ..findings import Finding, Severity
+from .netnew import net_new
 from .waivers import apply_waivers
 
 _SKIP = re.compile(
@@ -21,7 +22,8 @@ _EXPECT_TRUE = re.compile(r"\bexpect\s*\(\s*true\s*\)\s*\.\s*toBe(?:Truthy)?\s*\
 _EXPECT_TRUE2 = re.compile(r"\bexpect\s*\(\s*true\s*\)\s*\.\s*toBe\s*\(\s*true\s*\)", re.M)
 _REMOVED_EXPECT_HINT = re.compile(r"^\s*//\s*expect\b|^\s*/\*\s*expect\b", re.M)
 _TEST_FN = re.compile(
-    r"\b(?:it|test|describe)\s*\(\s*([`'\"])(.+?)\1",
+    # it/test/describe, focused/skipped variants (.only/.skip/xit) keep the same case name
+    r"\b(?:x?(?:it|test|describe))(?:\.(?:only|skip|todo|concurrent))?\s*\(\s*([`'\"])(.+?)\1",
     re.M,
 )
 _ASSERT_TRUE_JS = re.compile(r"\bassert\s*\(\s*true\s*[,)]", re.M)
@@ -77,7 +79,9 @@ def detect_js_ts_source(source: str, path: str = "") -> list[Finding]:
 
 
 def detect_js_ts_diff(old: str, new: str, path: str = "") -> list[Finding]:
-    findings = detect_js_ts_source(new, path=path)
+    """Presence-style findings are reported only when net-new versus ``old``."""
+    old_abs = detect_js_ts_source(old, path=path) if (old or "").strip() else []
+    findings = net_new(old_abs, old or "", detect_js_ts_source(new, path=path), new)
 
     old_names = {m.group(2) for m in _TEST_FN.finditer(old or "")}
     new_names = {m.group(2) for m in _TEST_FN.finditer(new or "")}
