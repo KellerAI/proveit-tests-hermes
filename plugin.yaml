@@ -1,0 +1,56 @@
+name: proveit-tests
+version: 0.1.0
+description: >-
+  Catches an agent weakening tests to reach green: removed or loosened asserts,
+  skip/xfail/.only, deleted tests, expected literals rewritten to match failing
+  output, assert True / tautologies, try/except pass wrappers, and test-runner
+  escape hatches (pytest || true, -k "not …", --deselect, --passWithNoTests,
+  CI continue-on-error). Deterministic AST + regex — no LLM. Modes: observe
+  (default), escalate to the human-approval gate, or block on unattended/cron
+  runs. Durable SHA-256 receipts and a /proveit ledger. Python-strong;
+  JS/TS coverage is heuristic and limited. Disclosure (rule 13): local-only,
+  reads edited test files and tool args to compare before/after; appends
+  warnings into tool results; may escalate or block tool calls when configured.
+  Not a sandbox and not unbypassable — an agent can still rewrite via shell,
+  disable the plugin, or invent new weakenings. Complements core verify-on-stop
+  and claim-vs-evidence plugins; does not certify compliance.
+author: ProveIt
+license: MIT
+requires_hermes: ">=0.22.7"
+homepage: ""  # set after private repo exists
+provides_tools: []
+provides_hooks:
+  - pre_tool_call
+  - post_tool_call
+  - transform_tool_result
+  - pre_verify
+  - on_session_start
+  - on_session_end
+provides_commands:
+  - proveit
+config_schema:
+  mode:
+    type: str
+    default: observe
+    description: "observe | escalate | block_unattended (block only when cron/unattended; otherwise escalate)"
+    required: false
+  test_path_globs:
+    type: list
+    default: ["**/test_*.py", "**/*_test.py", "**/tests/**/*.py", "**/*.test.js", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.js", "**/*.spec.ts", "**/*.spec.tsx", "**/__tests__/**"]
+    description: Globs treated as test files
+    required: false
+  ci_path_globs:
+    type: list
+    default: [".github/workflows/**", ".gitlab-ci.yml", "azure-pipelines*.yml", "Jenkinsfile", ".circleci/**"]
+    description: CI config paths watched for continue-on-error / allow_failure weakenings
+    required: false
+  receipt_dir:
+    type: str
+    default: ""
+    description: Optional override for receipt ledger directory (default: plugin data dir)
+    required: false
+  one_shot_nudge:
+    type: bool
+    default: true
+    description: When true, pre_verify nudges once per turn if unexplained weakenings remain
+    required: false

@@ -1,0 +1,36 @@
+# DRAFT only — do not open the catalog PR until Jonathan approves public repo + identity.
+# Pin must be the full 40-char commit SHA of a public https repo (catalog rule 2).
+name: proveit-tests
+repo: https://github.com/EXAMPLE/proveit-tests-hermes
+sha: "0000000000000000000000000000000000000000"  # PLACEHOLDER — replace after public freeze
+description: >-
+  Catches an agent weakening tests to reach green: removed or loosened asserts,
+  skip/xfail/.only, deleted tests, expected literals rewritten to match failing
+  output, assert True / tautologies, try/except pass wrappers, and test-runner
+  escape hatches (pytest || true, -k "not …", --deselect, --passWithNoTests,
+  CI continue-on-error). Deterministic AST + regex — no LLM. Modes: observe
+  (default), escalate to the human-approval gate, or block on unattended/cron
+  runs. Durable SHA-256 receipts and a /proveit ledger. Python-strong;
+  JS/TS coverage is heuristic and limited. Disclosure (rule 13): local-only,
+  reads edited test files and tool args to compare before/after; appends
+  warnings into tool results; may escalate or block tool calls when configured.
+  Not a sandbox and not unbypassable — an agent can still rewrite via shell,
+  disable the plugin, or invent new weakenings. Complements core verify-on-stop
+  and claim-vs-evidence plugins.
+maintainer: EXAMPLE  # UNRESOLVED entrant identity
+tier: community
+category: tools
+requires_hermes: ">=0.22.7"
+docs_url: https://github.com/EXAMPLE/proveit-tests-hermes#readme
+version: "0.1.0"
+capabilities:
+  provides_tools: []
+  provides_hooks:
+    - pre_tool_call
+    - post_tool_call
+    - transform_tool_result
+    - pre_verify
+    - on_session_start
+    - on_session_end
+  provides_middleware: []
+  requires_env: []
