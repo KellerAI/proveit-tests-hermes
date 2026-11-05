@@ -67,6 +67,11 @@ proveit-tests-hermes/
 Coverage TOTAL: 660 stmts, 119 miss, 82%
 ```
 
+## Repo
+
+- https://github.com/KellerAI/proveit-tests-hermes (private)
+- `main` @ `2bf63bd` pushed 2026-11-05 as son-of-anton-ai
+
 ## Single next Jonathan gate
 
-**Create an empty private GitHub repo** (name proposal `proveit-tests-hermes`; owner/identity still unresolved — personal vs KellerAI org) so this push-ready tree can be pushed via cloud. Keep it private. Do not open a catalog PR yet. Full list: `REMAINING-APPROVALS.md`.
+**Hermes throwaway-box install** (>=0.22.7) for `validate`/`doctor` and recorded synthetic demo (name proposal `proveit-tests-hermes`; owner/identity still unresolved — personal vs KellerAI org) so this push-ready tree can be pushed via cloud. Keep it private. Do not open a catalog PR yet. Full list: `REMAINING-APPROVALS.md`.
