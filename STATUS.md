@@ -20,7 +20,7 @@ proveit-tests-hermes/
 ├── REMAINING-APPROVALS.md
 ├── STATUS.md
 ├── proveit_tests/
-│   ├── detectors/           # python_ast, commands, js_ts, paths, waivers
+│   ├── detectors/           # python_ast, commands, addopts, pytest_config, js_ts, paths, waivers
 │   ├── receipts/            # SHA-256 ledger
 │   ├── hooks/               # runtime + CronProbe
 │   ├── findings.py
@@ -40,12 +40,13 @@ proveit-tests-hermes/
 | `plugin.yaml` + `register(ctx)` | done |
 | Python AST detectors + rename/extract FP heuristics | done |
 | Terminal / CI command detectors | done |
+| pytest config + `conftest.py` narrowing (eval selftest s4 gap) | done 2026-11-10 |
 | JS/TS heuristics + README limits | done |
 | Modes observe / escalate / unattended + `rule_key` | done |
 | SHA-256 receipt ledger | done |
 | Expanded adversarial corpus + legit FP controls | done |
-| Pure-Python pytest | **103 passed / 0 failed** |
-| Coverage (`proveit_tests`) | **95%** (780 stmts, 39 miss) |
+| Pure-Python pytest | **169 passed / 0 failed** (2026-11-10) |
+| Coverage (`proveit_tests`) | **96%** (1068 stmts, 41 miss) |
 | Mock Hermes PluginContext integration tests | done; plus real-loader + real-surface tests from v0.22.7 source |
 | Net-new weakening semantics (breaker P0) | done: pre-existing skips/tautologies not blamed on an edit; regression tests |
 | Honest footer (breaker P1) | done: `K open weakening(s) · receipt … · last test run seen: <real pytest summary>` |

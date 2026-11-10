@@ -8,7 +8,7 @@ python3 -m venv .venv && .venv/bin/pip install pytest pytest-cov
 .venv/bin/pytest --cov=proveit_tests --cov-report=term-missing -q
 ```
 
-Last run (2026-11-05 2:28 PM ET): **87 passed / 0 failed**, coverage `proveit_tests` **95%** (736 stmts, 40 miss).
+Last run (2026-11-10 10:09 AM ET): **169 passed / 0 failed**, coverage `proveit_tests` **96%** (1068 stmts, 41 miss).
 
 Includes:
 - `tests/test_hermes_integration_mock.py`: mock PluginContext (hooks, directives, receipts, `/proveit`).
@@ -19,6 +19,12 @@ Includes:
 - Net-new regression tests (breaker P0): identical old/new with a pre-existing skip, `assert True`,
   tautology or empty catch does **not** flag; a newly added skip / `.only` / `assert True` /
   empty catch **does**; post-edit without a pre-edit snapshot makes no claim.
+- `tests/test_pytest_config.py`: pytest config / `conftest.py` narrowing (2026-11-10). Positives for
+  `addopts` `-k`/`-m`/`--deselect`/`--ignore`/`--co`/… in pyproject (`[tool.pytest.ini_options]` and
+  native `[tool.pytest]`), `pytest.ini`, `.pytest.ini`, `setup.cfg`, `tox.ini`; `testpaths`/discovery
+  narrowing; `PYTEST_ADDOPTS`; tox `commands` and CI `run:` lines; conftest deselect/skip/ignore/report
+  hooks. Net-new: a pre-existing option is not re-flagged, a changed expression is. Negatives: version
+  bump, new dependency, coverage/ruff sections, harmless `addopts`, legit conftest fixtures and hooks.
 
 ## Hermes-gated: real `hermes plugins validate` / `doctor` (Gate 2, done 2026-11-05)
 

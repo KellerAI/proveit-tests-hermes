@@ -44,6 +44,13 @@ from ..detectors.commands import detect_ci_diff, detect_command_weakenings
 from ..detectors.js_ts import detect_js_ts_diff
 from ..detectors.paths import is_ci_path, is_test_path
 from ..detectors.python_ast import detect_python_diff
+from ..detectors.pytest_config import (
+    detect_command_lines_diff,
+    detect_conftest_diff,
+    detect_pytest_config_diff,
+    is_conftest_path,
+    is_pytest_config_path,
+)
 from ..findings import Finding
 from ..modes import Mode, resolve_mode
 from ..receipts.ledger import Ledger
@@ -145,7 +152,21 @@ class ProveItRuntime:
                 findings.extend(detect_js_ts_diff(old, new, path=path))
         if is_ci_path(path, self.ci_globs):
             findings.extend(detect_ci_diff(old, new, path=path))
+            findings.extend(detect_command_lines_diff(old, new, path=path))
+        if is_pytest_config_path(path):
+            findings.extend(detect_pytest_config_diff(old, new, path=path))
+        if is_conftest_path(path):
+            findings.extend(detect_conftest_diff(old, new, path=path))
         return findings
+
+    def is_watched_path(self, path: str) -> bool:
+        """Test files, CI configs, pytest config files, and conftest.py."""
+        return (
+            is_test_path(path, self.test_globs)
+            or is_ci_path(path, self.ci_globs)
+            or is_pytest_config_path(path)
+            or is_conftest_path(path)
+        )
 
     def analyze_command(self, command: str) -> list[Finding]:
         return detect_command_weakenings(command)
@@ -216,7 +237,7 @@ class ProveItRuntime:
 
         if tool in WRITE_TOOLS | PATCH_TOOLS or tool in {"write_file", "patch"}:
             path = _extract_path(args)
-            if path and (is_test_path(path, self.test_globs) or is_ci_path(path, self.ci_globs)):
+            if path and self.is_watched_path(path):
                 new = _extract_content(args)
                 old = _read_disk(path)
                 self._snapshots[path] = old
@@ -240,7 +261,7 @@ class ProveItRuntime:
         out = []
         for token in cmd.replace(">", " ").replace("|", " ").replace(";", " ").split():
             token = token.strip("'\"")
-            if token and (is_test_path(token, self.test_globs) or is_ci_path(token, self.ci_globs)):
+            if token and self.is_watched_path(token):
                 out.append(token)
         return out
 

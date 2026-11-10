@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from ..findings import Finding, Severity
+from .addopts import addopts_weakenings, split_opts
 
 # pytest / jest / vitest / npm test escape hatches
 _OR_TRUE = re.compile(
@@ -37,6 +38,11 @@ _EXIT_ZERO = re.compile(
 _IGNORE_FAIL = re.compile(
     r"(?:pytest|npm\s+test|jest|vitest)[^&\n|;]*\|\|\s*(?:echo|true|:)\b",
     re.I,
+)
+
+# PYTEST_ADDOPTS="-k 'not slow'" pytest  /  export PYTEST_ADDOPTS=--deselect=...
+_PYTEST_ADDOPTS_ENV = re.compile(
+    r"""\bPYTEST_ADDOPTS\s*=\s*("[^"]*"|'[^']*'|\S+)""",
 )
 
 _CONTINUE_ON_ERROR = re.compile(
@@ -137,6 +143,24 @@ def detect_command_weakenings(command: str) -> list[Finding]:
                     kind=kind,
                     message=message,
                     severity=Severity.CRITICAL,
+                    path="<command>",
+                    detail=redact_command(cmd),
+                )
+            )
+    for m in _PYTEST_ADDOPTS_ENV.finditer(cmd):
+        raw = m.group(1)
+        if raw[:1] in "\"'" and raw[-1:] == raw[:1]:
+            raw = raw[1:-1]
+        for kind, message, severity, _detail in addopts_weakenings(split_opts(raw)):
+            kind = "pytest-addopts-env-" + kind.removeprefix("pytest-config-")
+            if kind in seen:
+                continue
+            seen.add(kind)
+            findings.append(
+                Finding(
+                    kind=kind,
+                    message=message.replace("pytest addopts", "PYTEST_ADDOPTS"),
+                    severity=severity,
                     path="<command>",
                     detail=redact_command(cmd),
                 )
