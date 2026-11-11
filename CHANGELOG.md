@@ -26,6 +26,8 @@ patterns warned, three confirmed bugs). Thanks, Sachin.
   (for example `Error: permission denied`) dropped the open count to 0 while the weakening was
   still on disk. The pre-edit reconcile is now provisional, and `post_tool_call` undoes it and
   reconciles against what is actually on disk. Found by the Black Team's independent review.
+  The same path also clears a weakening the human denies in escalate mode, since Hermes
+  still emits `post_tool_call` for blocked calls and the disk is unchanged.
 
 ### Changed
 

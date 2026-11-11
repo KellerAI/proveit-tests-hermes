@@ -125,3 +125,23 @@ def test_successful_restore_after_failed_restore_still_clears(tmp_path):
 
     _write(rt, path, ORIG)
     assert rt._unexplained == []
+
+
+def test_denied_escalation_does_not_stay_open(tmp_path):
+    """A weakening the human denies never lands, so it must not count as open.
+
+    Hermes v0.23.0 still emits post_tool_call for a blocked call
+    (model_tools: ``_emit(result, status="blocked", ...)``).
+    """
+    path = tmp_path / "test_x.py"
+    path.write_text(ORIG, encoding="utf-8")
+    rt = ProveItRuntime(mode=Mode.ESCALATE, ledger_dir=tmp_path / "ledger")
+
+    args = {"path": str(path), "content": WEAK}
+    d = rt.on_pre_tool_call("write_file", args=args)
+    assert d is not None and d["action"] == "approve"
+    rt.on_post_tool_call("write_file", args=args, result="Error: denied by user", status="blocked")
+
+    assert path.read_text(encoding="utf-8") == ORIG
+    assert rt._unexplained == []
+    assert len(rt.ledger.all()) == 1  # the attempt is still on the record
