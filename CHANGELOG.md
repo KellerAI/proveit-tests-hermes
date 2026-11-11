@@ -21,6 +21,11 @@ patterns warned, three confirmed bugs). Thanks, Sachin.
   footer only reflected the latest edit. Outstanding findings are now tracked per file (and for
   commands) with stable identities, so two unresolved edits in two files count as 2 and
   restoring one gives 1.
+- **A failed restore no longer clears the warning.** For `write_file` and `patch`, the
+  restoration check ran in `pre_tool_call`, before the write landed, so a restore that failed
+  (for example `Error: permission denied`) dropped the open count to 0 while the weakening was
+  still on disk. The pre-edit reconcile is now provisional, and `post_tool_call` undoes it and
+  reconciles against what is actually on disk. Found by the Black Team's independent review.
 
 ### Changed
 

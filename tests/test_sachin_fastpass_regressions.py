@@ -86,3 +86,42 @@ def test_bug3_open_count_spans_files_and_drops_on_restore(tmp_path):
     assert len(rt._unexplained) == 1
     assert rt._unexplained[0].path == str(b)
     assert rt.footer_line().startswith("1 open weakening(s)")
+
+
+import pytest
+
+
+@pytest.mark.parametrize("mode", [Mode.OBSERVE, Mode.ESCALATE])
+def test_failed_restore_does_not_clear_weakening(tmp_path, mode):
+    """Andrej's break on b5d77a3: a restore whose write fails must leave 1 open."""
+    path = tmp_path / "test_x.py"
+    path.write_text(ORIG, encoding="utf-8")
+    rt = ProveItRuntime(mode=mode, ledger_dir=tmp_path / "ledger")
+
+    _write(rt, path, WEAK)
+    assert len(rt._unexplained) == 1
+
+    # Try to restore the original bytes, but the write never lands.
+    args = {"path": str(path), "content": ORIG}
+    rt.on_pre_tool_call("write_file", args=args)
+    rt.on_post_tool_call("write_file", args=args, result="Error: permission denied")
+
+    assert path.read_text(encoding="utf-8") == WEAK
+    assert len(rt._unexplained) == 1
+    assert rt.on_pre_verify(changed_paths=[str(path)]) is not None
+    assert rt.footer_line().startswith("1 open weakening(s)")
+
+
+def test_successful_restore_after_failed_restore_still_clears(tmp_path):
+    path = tmp_path / "test_x.py"
+    path.write_text(ORIG, encoding="utf-8")
+    rt = ProveItRuntime(mode=Mode.OBSERVE, ledger_dir=tmp_path / "ledger")
+
+    _write(rt, path, WEAK)
+    args = {"path": str(path), "content": ORIG}
+    rt.on_pre_tool_call("write_file", args=args)
+    rt.on_post_tool_call("write_file", args=args, result="Error: permission denied")
+    assert len(rt._unexplained) == 1
+
+    _write(rt, path, ORIG)
+    assert rt._unexplained == []

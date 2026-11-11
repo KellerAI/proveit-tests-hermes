@@ -151,6 +151,10 @@ class ProveItRuntime:
         self._snapshots: dict[str, str] = {}
         # paths whose edit was fully analyzed pre-edit (content in args)
         self._pre_analyzed: set[str] = set()
+        # path -> (outstanding, baseline) as they stood before the in-flight
+        # edit's provisional reconcile, so post_tool_call can undo it if the
+        # write did not land.
+        self._pre_state: dict[str, tuple[list[Finding] | None, str | None]] = {}
         # last test-runner summary seen in a terminal tool result, e.g. "3 passed, 1 failed"
         self.last_test_summary: str = ""
 
@@ -315,6 +319,12 @@ class ProveItRuntime:
                 if new is not None:
                     self._pre_analyzed.add(path)
                     edit_findings = self.analyze_file_change(path, old, new)
+                    # Provisional: post_tool_call re-reconciles from disk.
+                    prev = self._outstanding.get(path)
+                    self._pre_state[path] = (
+                        list(prev) if prev is not None else None,
+                        self._baselines.get(path),
+                    )
                     self.reconcile_path(path, old, new, edit_findings)
                     findings.extend(edit_findings)
                 # else: content not in args — post_tool_call diffs disk vs snapshot
@@ -368,6 +378,24 @@ class ProveItRuntime:
         old = self._snapshots.pop(path, None)
         if path in self._pre_analyzed:
             self._pre_analyzed.discard(path)
+            state = self._pre_state.pop(path, None)
+            if old is None or state is None:
+                return
+            # The pre-edit reconcile used the proposed content. Undo it and
+            # reconcile against what actually landed on disk, so a failed or
+            # blocked restore cannot clear a weakening that is still there.
+            prev_open, prev_base = state
+            if prev_open is None:
+                self._outstanding.pop(path, None)
+            else:
+                self._outstanding[path] = prev_open
+            if prev_base is None:
+                self._baselines.pop(path, None)
+            else:
+                self._baselines[path] = prev_base
+            disk = _read_disk(path)
+            if disk != old:
+                self.reconcile_path(path, old, disk, self.analyze_file_change(path, old, disk))
             return
         if old is None:
             return
