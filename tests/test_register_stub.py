@@ -50,4 +50,4 @@ def test_register_wires_expected_hooks():
         "on_session_start",
         "on_session_end",
     }
-    assert "proveit" in ctx.commands
+    assert "proveit-tests" in ctx.commands

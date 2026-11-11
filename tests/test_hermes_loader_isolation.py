@@ -28,7 +28,7 @@ class Ctx:
     def register_hook(self, n, cb): hooks.append(n)
     def register_command(self, n, h, description=""): cmds.append(n)
 mod.register(Ctx())
-assert "proveit" in cmds and "pre_tool_call" in hooks, (hooks, cmds)
+assert "proveit-tests" in cmds and "pre_tool_call" in hooks, (hooks, cmds)
 print("ok", sorted(hooks), cmds)
 '''
 

@@ -39,10 +39,17 @@ the `-k` expression does. Waive with a `# proveit: intended <reason>` comment on
 | `escalate` | `pre_tool_call` returns `{"action":"approve","rule_key":"proveit-tests:test-weakening"}` → Hermes human-approval gate. Blocks on cron/unattended. |
 | `block_unattended` | Blocks when `ctx.current_cron_execution()` is set; otherwise escalates (same `rule_key`). |
 
-At turn end, `pre_verify` can nudge once if unexplained weakenings remain. `/proveit` prints the session receipt ledger. Warnings appended to tool results end with a footer like
+At turn end, `pre_verify` can nudge once if unexplained weakenings remain. `/proveit-tests` prints the session receipt ledger. Warnings appended to tool results end with a footer like
 `[ProveIt] 1 open weakening(s) · receipt 3f9c1a2b4d5e · last test run seen: 1 failed`. The
 "last test run seen" part appears only when a pytest summary was actually seen in a terminal tool
 result; the plugin never invents a pass count.
+
+The open count is session-wide: it covers every watched file and command with an unresolved
+finding, not just the latest edit. Later edits to the same file are re-checked against the
+content before its first unresolved weakening, so restoring the original bytes (or otherwise
+fixing it) clears the current warning, while the earlier receipt stays in the ledger as history.
+Every non-empty batch is recorded, including batches where every finding is waived; waived
+batches get a receipt but no warning or escalation.
 
 Inline waiver (logged, not silent):
 
@@ -91,7 +98,7 @@ pytest config files and `conftest.py` are matched by file name (not configurable
 - May **append warnings** into tool results (`transform_tool_result`).
 - May **escalate or block** tool calls when mode is not `observe`.
 - Writes a **SHA-256 receipt ledger** (`receipts.jsonl`, dir `0700`, file `0600`) only under the Hermes plugin data directory (`$HERMES_HOME/plugin-data/proveit-tests/`). `receipt_dir` can only pick a subdirectory inside it; it cannot point the ledger elsewhere.
-- If Hermes provides no plugin data directory, the ledger **fails closed to in-memory only** (logged warning; `/proveit` says "in-memory only") — nothing is written to `/tmp` or any other shared location.
+- If Hermes provides no plugin data directory, the ledger **fails closed to in-memory only** (logged warning; `/proveit-tests` says "in-memory only") — nothing is written to `/tmp` or any other shared location.
 - **Terminal findings may retain a short excerpt of the command text locally** (≤200 chars) in that ledger as evidence. Secret-looking substrings (URL credentials, `Authorization`/bearer values, `*_TOKEN=`/`*PASSWORD=`-style env assignments, `--token`/`--password`/`--api-key` flags, common token prefixes like `ghp_`/`sk-`/`AKIA`, long opaque strings) are redacted first. Redaction is best-effort: an unusual secret format can survive, so avoid inlining credentials in test commands.
 - **Not a sandbox and not unbypassable.** An agent can still rewrite files via novel shell indirections, edit outside watched globs, disable the plugin, or invent new weakenings. Treat findings as signals, not proof of malice or of safety.
 
@@ -121,6 +128,8 @@ If a future Hermes build stops putting file contents in write/patch args, pre-ed
   task-runner configs other than tox (`Makefile`, `package.json`, `noxfile.py`), and a config file
   that no longer parses (no claim is made). JS runner configs (`jest.config.*`, `vitest.config.*`) are
   not watched.
+- Widening a `pytest.raises(...)` expectation (for example to `pytest.raises(Exception)`) is not
+  flagged yet. This is a known gap from Sachin's fast pass and is not addressed in this release.
 
 ## Development (no Hermes required)
 
@@ -135,6 +144,12 @@ Mock Hermes PluginContext integration tests live in `tests/test_hermes_integrati
 `tests/test_hermes_loader_isolation.py` and `tests/test_hermes_real_surface.py` pin the loader and
 `ctx.get_config` / `patch` shapes of Hermes v0.22.7. Real `hermes plugins validate` / `doctor`
 results are in `VALIDATION.md`.
+
+## Credits
+
+Thanks to Sachin for the independent fast pass against `2412a18`, which found the waived-batch
+ledger gap, the stale status after an exact restoration, and the per-batch open count fixed in
+this release (see `CHANGELOG.md`).
 
 ## License
 

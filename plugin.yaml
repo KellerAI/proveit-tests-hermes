@@ -10,7 +10,7 @@ description: >-
   as it was before, so pre-existing skips are not blamed on the edit.
   Deterministic AST + regex — no LLM. Modes: observe
   (default), escalate to the human-approval gate, or block on unattended/cron
-  runs. Durable SHA-256 receipts and a /proveit ledger. Python-strong;
+  runs. Durable SHA-256 receipts and a /proveit-tests ledger. Python-strong;
   JS/TS coverage is heuristic and limited. Disclosure (rule 13): local-only,
   reads edited test, CI, pytest-config and conftest.py files and tool args to compare before/after; appends
   warnings into tool results; may escalate or block tool calls when configured.
@@ -33,7 +33,7 @@ provides_hooks:
   - on_session_start
   - on_session_end
 provides_commands:
-  - proveit
+  - proveit-tests
 config_schema:
   mode:
     type: str
