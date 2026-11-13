@@ -106,7 +106,7 @@ def _get_runtime() -> ProveItRuntime:
 def register(ctx: Any) -> None:
     """Hermes plugin entry point.
 
-    Registers documented hooks + `/proveit` slash command. Callbacks accept
+    Registers documented hooks + `/proveit-tests` slash command. Callbacks accept
     ``**kwargs`` so additive Hermes payload fields stay backward-compatible.
     Escalate directives include ``rule_key`` for per-rule approval persistence.
     Not unbypassable — see README "Hook feasibility".
@@ -163,7 +163,7 @@ def register(ctx: Any) -> None:
     ctx.register_hook("on_session_start", on_session_start)
     ctx.register_hook("on_session_end", on_session_end)
     ctx.register_command(
-        "proveit",
+        "proveit-tests",
         proveit_cmd,
         description="Show the ProveIt Tests receipt ledger for this session",
     )

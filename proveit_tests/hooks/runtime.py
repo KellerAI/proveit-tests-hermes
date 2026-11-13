@@ -104,6 +104,12 @@ def _ext(path: str) -> str:
     return Path(path).suffix.lower()
 
 
+def _identity(f: Finding) -> tuple[str, str, str, str]:
+    """Stable identity for an outstanding finding (line numbers excluded, since
+    unrelated edits can shift them)."""
+    return (f.kind, f.path or "<command>", f.message, f.detail)
+
+
 class ProveItRuntime:
     def __init__(
         self,
@@ -131,13 +137,24 @@ class ProveItRuntime:
             )
         self.ledger = Ledger(ledger_dir)
         self._pending_warnings: list[str] = []
-        self._unexplained: list[Finding] = []
+        # Outstanding (unwaived, unresolved) findings, keyed by watched path
+        # ("<command>" for terminal findings). Kept across batches and files so
+        # the open count is session-wide, not just the latest batch.
+        self._outstanding: dict[str, list[Finding]] = {}
+        # path -> content before the first edit that left findings outstanding.
+        # Later edits to that path are re-diffed against it, so an exact
+        # restoration (or a fix) clears the current warning.
+        self._baselines: dict[str, str] = {}
         self._nudged = False
         self._last_receipt_digest = ""
         # path -> file content before the in-flight edit (None = unknown)
         self._snapshots: dict[str, str] = {}
         # paths whose edit was fully analyzed pre-edit (content in args)
         self._pre_analyzed: set[str] = set()
+        # path -> (outstanding, baseline) as they stood before the in-flight
+        # edit's provisional reconcile, so post_tool_call can undo it if the
+        # write did not land.
+        self._pre_state: dict[str, tuple[list[Finding] | None, str | None]] = {}
         # last test-runner summary seen in a terminal tool result, e.g. "3 passed, 1 failed"
         self.last_test_summary: str = ""
 
@@ -171,20 +188,71 @@ class ProveItRuntime:
     def analyze_command(self, command: str) -> list[Finding]:
         return detect_command_weakenings(command)
 
+    # ------------------------------------------------------------ outstanding
+    @property
+    def _unexplained(self) -> list[Finding]:
+        """Flat view of every outstanding finding across files and commands."""
+        return [f for fl in self._outstanding.values() for f in fl]
+
+    @_unexplained.setter
+    def _unexplained(self, value: list[Finding]) -> None:
+        # Session reset (``rt._unexplained = []``) clears all outstanding state.
+        self._outstanding = {}
+        self._baselines = {}
+        for f in value or []:
+            self._add_outstanding(f.path or "<command>", [f])
+
+    def _add_outstanding(self, key: str, findings: list[Finding]) -> None:
+        cur = self._outstanding.setdefault(key, [])
+        seen = {_identity(f) for f in cur}
+        for f in findings:
+            if not f.waived and _identity(f) not in seen:
+                cur.append(f)
+                seen.add(_identity(f))
+        if not cur:
+            self._outstanding.pop(key, None)
+
+    def reconcile_path(self, path: str, old: str, new: str, edit_findings: list[Finding]) -> None:
+        """Update outstanding findings for ``path`` after an edit (old -> new).
+
+        Runs on every edit to a watched path, including clean and strengthening
+        edits. Historical receipts are never touched; only the current
+        unresolved view changes.
+        """
+        baseline = self._baselines.get(path)
+        if baseline is None:
+            current = [f for f in edit_findings if not f.waived]
+            if current:
+                self._baselines[path] = old
+        else:
+            current = [
+                f for f in self.analyze_file_change(path, baseline, new) if not f.waived
+            ]
+        if current:
+            self._outstanding[path] = []
+            self._add_outstanding(path, current)
+        else:
+            self._outstanding.pop(path, None)
+            self._baselines.pop(path, None)
+
     # --------------------------------------------------------------- directives
     def decide(self, findings: list[Finding]) -> dict[str, Any] | None:
         """Return a pre_tool_call directive or None for observe-only."""
-        open_findings = [f for f in findings if not f.waived]
-        if not open_findings:
+        if not findings:
             return None
-
+        # Every non-empty batch is logged, including fully waived ones
+        # ("logged, not silent"). Warn/escalate is suppressed separately below.
         receipt = self.ledger.record(
             findings,
             session_id=self.session_id,
             mode=self.mode.value,
         )
         self._last_receipt_digest = receipt.digest
-        self._unexplained = list(open_findings)
+        open_findings = [f for f in findings if not f.waived]
+        if not open_findings:
+            return None
+        if any(not f.path for f in open_findings):
+            self._add_outstanding("<command>", [f for f in open_findings if not f.path])
         summary = "; ".join(f.short() for f in open_findings[:5])
         if len(open_findings) > 5:
             summary += f" (+{len(open_findings) - 5} more)"
@@ -250,7 +318,15 @@ class ProveItRuntime:
                     new = old.replace(str(args.get("old_str", "")), str(args.get("new_str", "")), 1)
                 if new is not None:
                     self._pre_analyzed.add(path)
-                    findings.extend(self.analyze_file_change(path, old, new))
+                    edit_findings = self.analyze_file_change(path, old, new)
+                    # Provisional: post_tool_call re-reconciles from disk.
+                    prev = self._outstanding.get(path)
+                    self._pre_state[path] = (
+                        list(prev) if prev is not None else None,
+                        self._baselines.get(path),
+                    )
+                    self.reconcile_path(path, old, new, edit_findings)
+                    findings.extend(edit_findings)
                 # else: content not in args — post_tool_call diffs disk vs snapshot
 
         if not findings:
@@ -289,7 +365,8 @@ class ProveItRuntime:
                 new = _read_disk(token)
                 if new != old:
                     findings = self.analyze_file_change(token, old, new)
-                    if [f for f in findings if not f.waived]:
+                    self.reconcile_path(token, old, new, findings)
+                    if findings:
                         self.decide(findings)
             return
         if tool not in WRITE_TOOLS | PATCH_TOOLS:
@@ -301,6 +378,24 @@ class ProveItRuntime:
         old = self._snapshots.pop(path, None)
         if path in self._pre_analyzed:
             self._pre_analyzed.discard(path)
+            state = self._pre_state.pop(path, None)
+            if old is None or state is None:
+                return
+            # The pre-edit reconcile used the proposed content. Undo it and
+            # reconcile against what actually landed on disk, so a failed or
+            # blocked restore cannot clear a weakening that is still there.
+            prev_open, prev_base = state
+            if prev_open is None:
+                self._outstanding.pop(path, None)
+            else:
+                self._outstanding[path] = prev_open
+            if prev_base is None:
+                self._baselines.pop(path, None)
+            else:
+                self._baselines[path] = prev_base
+            disk = _read_disk(path)
+            if disk != old:
+                self.reconcile_path(path, old, disk, self.analyze_file_change(path, old, disk))
             return
         if old is None:
             return
@@ -308,6 +403,7 @@ class ProveItRuntime:
         if new == old:
             return
         findings = self.analyze_file_change(path, old, new)
+        self.reconcile_path(path, old, new, findings)
         if findings:
             self.decide(findings)
 

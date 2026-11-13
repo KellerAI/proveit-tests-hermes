@@ -139,8 +139,9 @@ def _has_try_except_pass(node: ast.AST) -> bool:
 def _assert_true_lines(source: str) -> list[int]:
     lines = []
     for i, line in enumerate(source.splitlines(), start=1):
-        if _ASSERT_TRUE.search(line) and "proveit: intended" not in line.lower():
-            # ignore assert True, "msg" used as documentation? still a tautology for value
+        if _ASSERT_TRUE.search(line):
+            # Same-line `# proveit: intended` waivers are applied by
+            # apply_waivers (marked waived and logged), not dropped here.
             lines.append(i)
     return lines
 

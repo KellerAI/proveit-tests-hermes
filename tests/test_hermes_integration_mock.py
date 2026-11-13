@@ -58,7 +58,7 @@ def test_register_observe_write_file_warns(tmp_path):
         "on_session_start",
         "on_session_end",
     }
-    assert "proveit" in ctx.commands
+    assert "proveit-tests" in ctx.commands
 
     path = tmp_path / "test_x.py"
     path.write_text("def test_a():\n    assert 1 + 1 == 2\n", encoding="utf-8")
@@ -73,7 +73,7 @@ def test_register_observe_write_file_warns(tmp_path):
     assert "ProveIt" in out
     assert "receipt" in out.lower() or "weakening" in out.lower() or "assert" in out.lower()
 
-    ledger = ctx.commands["proveit"]("")
+    ledger = ctx.commands["proveit-tests"]("")
     assert "ProveIt ledger" in ledger
     assert "assert-true" in ledger or "open=" in ledger
 

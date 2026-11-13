@@ -127,7 +127,7 @@ def test_register_without_data_dir_is_in_memory(tmp_path):
     plugin = load_plugin_like_hermes("proveit_tests_plugin_nodatadir")
     ctx = GetConfigCtx({"mode": "escalate"})
     plugin.register(ctx)
-    assert "in-memory only" in ctx.commands["proveit"]("")
+    assert "in-memory only" in ctx.commands["proveit-tests"]("")
 
 
 def test_ledger_files_are_owner_only(tmp_path):
