@@ -10,7 +10,7 @@
 - `__init__.py`, `proveit_tests/` - plugin code
 - `tests/` - pytest suite, including mock Hermes integration tests
 - `corpus/cheats/` (must flag) and `corpus/legit/` (false-positive control)
-- `CHANGELOG.md`, `STATUS.md`, `VALIDATION.md`, `REMAINING-APPROVALS.md`, `DEMO.md`
+- `CHANGELOG.md`, `VALIDATION.md`, `DEMO.md`
 
 ## Setup and tests
 
@@ -30,5 +30,6 @@ Requires Hermes `>=0.22.7` at runtime.
 - The receipt ledger stays inside the Hermes plugin data dir. Don't add writes to `/tmp` or other shared paths.
 - New detectors need a `corpus/cheats/` case that must flag and, where relevant, a `corpus/legit/` case that must not.
 - Keep JS/TS claims honest. Those detectors are heuristic, and the README says so.
-- Public release, catalog listing and demo posts are held. See `REMAINING-APPROVALS.md` and don't act on them without maintainer approval.
+- This repo is public. Keep working notes, status files, approval lists, drafts and machine-specific paths out of it. Put them in your own notes or the tracker, not in a commit. `scripts/check_public_hygiene.py` runs in the test suite and CI and fails if any of these land.
+- Don't open catalog PRs, post, or submit forms without maintainer approval.
 - Update `CHANGELOG.md` for user-visible changes.

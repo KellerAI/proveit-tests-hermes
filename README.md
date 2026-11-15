@@ -63,7 +63,7 @@ def test_flaky_network():
 ## Install
 
 ```bash
-# once this repo is public and catalog-listed (not yet — see REMAINING-APPROVALS.md)
+# once catalog-listed
 hermes plugins install proveit-tests
 hermes plugins enable proveit-tests
 ```
@@ -155,6 +155,6 @@ this release (see `CHANGELOG.md`).
 
 MIT. ProveIt brand — standalone plugin, not affiliated with Nous Research beyond the Hermes plugin API.
 
-## Catalog / contest status
+## Contest
 
-Private draft package. Public repo, catalog PR, X demo post, and form submission are **held** pending maintainer approval — see `REMAINING-APPROVALS.md`.
+Entered in the Nous Research Hermes plugin hackathon.

@@ -1,6 +1,6 @@
 # ProveIt Tests: synthetic demo (<90s)
 
-Synthetic fixture only. No real accounts, no Mac Mini, no private data, no model spend.
+Synthetic fixture only. No real accounts, no private data, no model spend.
 
 ## Recording (Gate 2, no-spend): done
 
@@ -63,7 +63,7 @@ The test runner inside the demo defaults to `.venv/bin/python` in this repo; ove
 
 The recording shows the real plugin inside the real Hermes runtime, but no model chose the cheat. The contest
 cut with a live Hermes agent turn ("make the tests pass" → model tries the rewrite) needs a provider and spend.
-That is Gate 5 in REMAINING-APPROVALS.md. Use the same fixture and beats.
+Use the same fixture and beats.
 
 ## Fixture checks without Hermes
 
