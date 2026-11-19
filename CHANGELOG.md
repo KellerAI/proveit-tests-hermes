@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Repository
+
+- Removed internal working notes (`STATUS.md`, `REMAINING-APPROVALS.md`, `drafts/`) and
+  machine-specific paths from the public repo.
+- Added `scripts/check_public_hygiene.py`, run by `tests/test_public_hygiene.py` and the
+  `public-hygiene` workflow, so internal note files and markers fail the build.
+
 Fixes from Sachin's independent fast pass against `2412a18` (169 passing, 4/4 sampled
 patterns warned, three confirmed bugs). Thanks, Sachin.
 

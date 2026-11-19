@@ -28,17 +28,17 @@ Includes:
 
 ## Hermes-gated: real `hermes plugins validate` / `doctor` (Gate 2, done 2026-11-05)
 
-Gate 2 approved by Jonathan at 2:13 PM ET. Throwaway install on the shared box only (not the Mac Mini, no live
+Throwaway install only (no live
 profile, no real accounts, no API keys, no model calls).
 
 | | |
 |---|---|
 | Hermes | `Hermes Agent v0.22.7 · upstream b200f5bc` (tag `v0.22.7` = `b200f5bc60e31588ba2cb60e288029c4a54ba5fa`) |
 | Source | GitHub release tarball `v0.22.7` (sha256 `91bf15f5…8b91d`), `uv sync --frozen` from its `uv.lock`, Python 3.14.10 |
-| Install root | `/workspace/hermes-hackathon-launch/throwaway-hermes/` (venv, src, python) |
-| `HERMES_HOME` | `/workspace/hermes-hackathon-launch/throwaway-hermes/hermes-home` |
-| `HOME` | `/workspace/hermes-hackathon-launch/throwaway-hermes/home` (so nothing touches `~/.hermes`) |
-| Env | `source /workspace/hermes-hackathon-launch/throwaway-hermes/env.sh` (also unsets provider API key vars) |
+| Install root | `<throwaway>/` (venv, src, python) |
+| `HERMES_HOME` | `<throwaway>/hermes-home` |
+| `HOME` | `<throwaway>/home` (so nothing touches `~/.hermes`) |
+| Env | `source <throwaway>/env.sh` (also unsets provider API key vars) |
 
 The tarball has no `.git`, so `hermes --version` printed `vunknown` at first. We wrote an install stamp with Hermes'
 own `scripts/write_install_stamp.py --base-version 0.22.7 --commit b200f5bc…` so `requires_hermes` compares
@@ -47,7 +47,7 @@ That warning is about Hermes' PM-managed tool bundle, which this manual install 
 plugin checks.
 
 ```bash
-source /workspace/hermes-hackathon-launch/throwaway-hermes/env.sh
+source <throwaway>/env.sh
 cd proveit-tests-hermes
 hermes plugins validate . --install-deps
 hermes plugins doctor . --ci
@@ -56,7 +56,7 @@ hermes plugins validate /tmp/proveit-clean --install-deps
 hermes plugins doctor /tmp/proveit-clean --ci
 ```
 
-Full output: `artifacts/gate2-validate.txt` and `artifacts/gate2-doctor.txt`.
+Full output was captured locally and is not tracked in this repo.
 
 ### History of results
 
@@ -65,7 +65,7 @@ Full output: `artifacts/gate2-validate.txt` and `artifacts/gate2-doctor.txt`.
 | `f7af12b` (pre-Gate-2) | **exit 1** | — | `✗ capability probe — import failed: No module named 'proveit_tests'`. A real defect: Hermes loads the plugin as a package without putting its dir on `sys.path`, and the mock tests never caught it. |
 | `bd0c2d7` | exit 0 | exit 0 | Relative imports under the Hermes loader, plus a loader-isolation regression test. |
 | `97a4197` | exit 0 | exit 0 | Working tree **and** clean clone. All checks ✓ (manifest, requires_hermes, config schema, loadable, capability probe, declared hooks match, security scan **safe**, no core override). One warning: private core imports in the demo harness, so the harness was moved out of the plugin tree (see DEMO.md). |
-| current tip | exit 0 | exit 0 | See `artifacts/gate2-validate.txt` header for the exact commit. |
+| current tip | exit 0 | exit 0 | Same checks as above. |
 
 Advisory line (expected): `corpus/cheats/syntax_break_new.py: not parseable … not audited`. That file is an
 intentional adversarial fixture (a test edit that breaks syntax).

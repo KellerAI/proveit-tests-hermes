@@ -30,7 +30,7 @@ Hook feasibility (honest):
   not claim plugin hooks are a sandbox.
 
 When proposed content is missing from args, we fall back to post-edit observe
-on the next tool call / transform_tool_result and document that in STATUS.md.
+on the next tool call / transform_tool_result and document that in README.md.
 """
 
 from __future__ import annotations

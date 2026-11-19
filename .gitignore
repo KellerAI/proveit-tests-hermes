@@ -11,3 +11,9 @@ build/
 receipts.jsonl
 .pytest_cache/
 artifacts/
+# Internal working notes stay out of this public repo
+STATUS.md
+REMAINING-APPROVALS.md
+drafts/
+internal/
+*.internal.md
