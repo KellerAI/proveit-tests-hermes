@@ -154,7 +154,7 @@ def test_unittest_assert_equal_literal_rewrite():
         "        self.assertEqual(total, 9)\n"
     )
     f = detect_python_diff(old, new, path="test_t.py")
-    assert any(x.kind == "expected-literal-rewrite" for x in f)
+    assert any(x.kind == "expected-value-changed" for x in f)
 
 
 def test_summarize_and_syntax():

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Classify in-place expected-value changes as review items and block recognizable
+  assertion weakening, including direct exception widening and renamed tests
+  with changed expectations.
+
 ### Repository
 
 - Removed internal working notes (`STATUS.md`, `REMAINING-APPROVALS.md`, `drafts/`) and

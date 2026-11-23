@@ -42,7 +42,7 @@ def test_expected_literal_rewrite():
         _read("cheats/expected_rewrite_new.py"),
         path="test_total.py",
     )
-    assert any(x.kind == "expected-literal-rewrite" and not x.waived for x in f)
+    assert any(x.kind == "expected-value-changed" and not x.waived for x in f)
 
 
 def test_removed_assert():
@@ -70,7 +70,7 @@ def test_legit_rename_helper_no_critical_open():
         path="test_total.py",
     )
     open_critical = [x for x in f if not x.waived and x.kind in {
-        "removed-assert", "deleted-test", "expected-literal-rewrite",
+        "removed-assert", "deleted-test", "expected-value-changed",
         "assert-true", "tautology", "skip-or-xfail", "try-except-pass",
     }]
     assert open_critical == []

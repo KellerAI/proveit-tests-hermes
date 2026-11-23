@@ -7,6 +7,9 @@ from enum import Enum
 from typing import Any
 
 
+from .engine.policy import Tier, finding_tier
+
+
 class Severity(str, Enum):
     WARNING = "warning"
     CRITICAL = "critical"
@@ -24,6 +27,11 @@ class Finding:
     waived: bool = False
     waiver_reason: str = ""
     evidence: dict[str, Any] = field(default_factory=dict, hash=False, compare=False)
+
+    tier: Tier = field(init=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "tier", finding_tier(self.kind))
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)

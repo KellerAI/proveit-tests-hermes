@@ -29,74 +29,40 @@ def _is_test_func(name: str) -> bool:
 
 
 def _func_nodes(tree: ast.AST) -> dict[str, ast.AST]:
-    out: dict[str, ast.AST] = {}
-    for node in ast.walk(tree):
+    out = {}
+    for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and _is_test_func(node.name):
             out[node.name] = node
         if isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
             for child in node.body:
-                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and _is_test_func(
-                    child.name
-                ):
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and _is_test_func(child.name):
                     out[f"{node.name}.{child.name}"] = child
     return out
 
 
 def _count_asserts(node: ast.AST) -> int:
-    n = 0
-    for child in ast.walk(node):
-        if isinstance(child, ast.Assert):
-            n += 1
-        elif isinstance(child, ast.Call):
-            func = child.func
-            name = ""
-            if isinstance(func, ast.Attribute):
-                name = func.attr
-            elif isinstance(func, ast.Name):
-                name = func.id
-            if name.startswith("assert") or name in {
-                "assertEqual",
-                "assertEquals",
-                "assertTrue",
-                "assertFalse",
-                "assertIn",
-                "assertRaises",
-                "assertAlmostEqual",
-                "assertIs",
-                "assertIsNone",
-                "assertIsNotNone",
-                "assertGreater",
-                "assertLess",
-            }:
-                n += 1
-    return n
-
-
+    return len(_checks(node))
 
 
 def _module_assert_count(tree: ast.AST | None) -> int:
-    if tree is None:
-        return 0
-    return sum(_count_asserts(node) for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)))
+    return len(_checks(tree)) if tree is not None else 0
 
 
-def _looks_like_rename(
-    old_funcs: dict[str, ast.AST],
-    new_funcs: dict[str, ast.AST],
-    removed_name: str,
-) -> str | None:
-    """If a deleted test has a same-assert-count newly added twin, treat as rename.
+def _checks(node: ast.AST) -> list[ast.Assert | ast.Call]:
+    checks = []
+    for child in ast.walk(node):
+        if isinstance(child, ast.Assert):
+            checks.append(child)
+        elif isinstance(child, ast.Call):
+            name = getattr(child.func, "attr", getattr(child.func, "id", ""))
+            if name.startswith("assert") or _raises(child):
+                checks.append(child)
+    return sorted(checks, key=lambda check: (check.lineno, check.col_offset))
 
-    Returns the matched new name, or None. Greedy; callers should consume matches.
-    """
-    if removed_name not in old_funcs:
-        return None
-    old_n = _count_asserts(old_funcs[removed_name])
-    added = sorted(set(new_funcs) - set(old_funcs))
-    for cand in added:
-        if _count_asserts(new_funcs[cand]) == old_n:
-            return cand
-    return None
+
+def _raises(node: ast.AST) -> bool:
+    return isinstance(node, ast.Call) and ast.unparse(node.func) == "pytest.raises"
+
 
 def _decorator_names(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
     names: list[str] = []
@@ -146,21 +112,72 @@ def _assert_true_lines(source: str) -> list[int]:
     return lines
 
 
-def _literal_eq_asserts(node: ast.AST) -> list[tuple[int, str]]:
-    """Return (lineno, expected_repr) for assert x == <literal> style checks."""
-    out: list[tuple[int, str]] = []
-    for child in ast.walk(node):
-        if isinstance(child, ast.Assert) and isinstance(child.test, ast.Compare):
-            if len(child.test.ops) == 1 and isinstance(child.test.ops[0], (ast.Eq, ast.Is)):
-                right = child.test.comparators[0]
-                if isinstance(right, ast.Constant):
-                    out.append((child.lineno, repr(right.value)))
-        if isinstance(child, ast.Call) and isinstance(child.func, ast.Attribute):
-            if child.func.attr in {"assertEqual", "assertEquals"} and len(child.args) >= 2:
-                right = child.args[1]
-                if isinstance(right, ast.Constant):
-                    out.append((child.lineno, repr(right.value)))
-    return out
+def _shape(node: ast.AST):
+    if isinstance(node, ast.Constant):
+        return ast.Constant, "_"
+    return type(node), tuple(
+        _shape(value) if isinstance(value, ast.AST)
+        else tuple(_shape(item) if isinstance(item, ast.AST) else item for item in value)
+        if isinstance(value, list) else value
+        for _, value in ast.iter_fields(node)
+    )
+
+
+def _comparison(check: ast.AST) -> ast.cmpop | None:
+    if isinstance(check, ast.Assert) and isinstance(check.test, ast.Compare):
+        if len(check.test.ops) == 1:
+            return check.test.ops[0]
+    return None
+
+
+def _strong(check: ast.AST) -> bool:
+    if isinstance(_comparison(check), (ast.Eq, ast.Is)):
+        return True
+    return isinstance(check, ast.Call) and (
+        _raises(check) or getattr(check.func, "attr", "") in {"assertEqual", "assertEquals", "assertRaises"}
+    )
+
+
+def _exception_types(check: ast.Call) -> set[str]:
+    if not check.args:
+        return set()
+    arg = check.args[0]
+    return {ast.unparse(item) for item in (arg.elts if isinstance(arg, ast.Tuple) else [arg])}
+
+
+def _change_kind(old: ast.AST, new: ast.AST, renamed: bool) -> str | None:
+    if _strong(old) and not _strong(new):
+        return "assertion-weakened"
+    if _raises(old) and _raises(new):
+        before, after = _exception_types(old), _exception_types(new)
+        if before < after or (after - before) & {
+            "Exception", "BaseException", "builtins.Exception", "builtins.BaseException"
+        }:
+            return "assertion-weakened"
+        expected_change = (
+            before != after and len(before) == len(after) == 1
+            and ast.dump(ast.Tuple(elts=old.args[1:] + old.keywords))
+            == ast.dump(ast.Tuple(elts=new.args[1:] + new.keywords))
+        )
+    else:
+        expected_change = _strong(old) and _shape(old) == _shape(new)
+    if expected_change and ast.dump(old) != ast.dump(new):
+        return "renamed-test-changed-expectation" if renamed else "expected-value-changed"
+    return None
+
+
+def _renamed_shape(node: ast.AST):
+    # Compare the whole function, ignoring its name and normalizing checks.
+    body = ast.parse(ast.unparse(node)).body[0].body
+    for statement in ast.walk(ast.Module(body=body)):
+        if isinstance(statement, ast.Assert):
+            statement.test = ast.Constant("_")
+        elif _raises(statement):
+            statement.args = []
+    return (
+        type(node), ast.dump(node.args), tuple(map(ast.dump, node.decorator_list)),
+        tuple(_shape(statement) for statement in body),
+    )
 
 
 def _parse(source: str) -> ast.AST | None:
@@ -308,66 +325,64 @@ def detect_python_diff(old: str, new: str, path: str = "") -> list[Finding]:
             if f.kind not in {"removed-assert", "assertionless-test"}
         ]
 
-    # Deleted tests (skip rename-shaped pairs: same assert count, new name appeared)
-    claimed_renames: set[str] = set()
+    pairs = [(name, name) for name in sorted(old_funcs.keys() & new_funcs.keys())]
+    added = set(new_funcs) - set(old_funcs)
     for name in sorted(set(old_funcs) - set(new_funcs)):
-        twin = _looks_like_rename(old_funcs, new_funcs, name)
-        if twin and twin not in claimed_renames:
-            claimed_renames.add(twin)
-            continue
-        findings.append(
-            Finding(
-                kind="deleted-test",
-                message=f"Test function removed: {name}",
-                severity=Severity.CRITICAL,
-                path=path,
-                line=getattr(old_funcs[name], "lineno", None),
-            )
-        )
-
-    # Assert count drops / expected literal changes
-    for name, new_node in new_funcs.items():
-        if name not in old_funcs:
-            continue
         old_node = old_funcs[name]
-        old_n = _count_asserts(old_node)
-        new_n = _count_asserts(new_node)
+        twin = next(
+            (candidate for candidate in sorted(added)
+             if _renamed_shape(old_node) == _renamed_shape(new_funcs[candidate])),
+            None,
+        )
+        if twin is not None:
+            pairs.append((name, twin))
+            added.remove(twin)
+        else:
+            findings.append(Finding(
+                kind="deleted-test", message=f"Test function removed: {name}",
+                severity=Severity.CRITICAL, path=path, line=old_node.lineno,
+            ))
+
+    messages = {
+        "assertion-weakened": "Assertion weakened",
+        "renamed-test-changed-expectation": "Expected value changed in renamed test",
+        "expected-value-changed": "Expected value changed",
+    }
+    for old_name, name in pairs:
+        old_checks = _checks(old_funcs[old_name])
+        new_checks = _checks(new_funcs[name])
+        old_n, new_n = len(old_checks), len(new_checks)
         if new_n < old_n and not module_asserts_stable:
-            findings.append(
-                Finding(
-                    kind="removed-assert",
-                    message=f"Assert count in {name} dropped {old_n} → {new_n}",
-                    severity=Severity.CRITICAL,
-                    path=path,
-                    line=getattr(new_node, "lineno", None),
-                    evidence={"old": old_n, "new": new_n},
-                )
-            )
+            findings.append(Finding(
+                kind="removed-assert", message=f"Assert count in {name} dropped {old_n} → {new_n}",
+                severity=Severity.CRITICAL, path=path, line=new_funcs[name].lineno,
+                evidence={"old": old_n, "new": new_n},
+            ))
 
-        old_lits = {v: ln for ln, v in _literal_eq_asserts(old_node)}
-        new_lits = {v: ln for ln, v in _literal_eq_asserts(new_node)}
-        # If an expected literal disappeared and a different one appeared in same test, flag rewrite
-        if old_lits and new_lits and set(old_lits) != set(new_lits):
-            # Heuristic: any change of expected constant in an equality assert
-            removed = set(old_lits) - set(new_lits)
-            added = set(new_lits) - set(old_lits)
-            if removed and added:
-                findings.append(
-                    Finding(
-                        kind="expected-literal-rewrite",
-                        message=(
-                            f"Expected literal in {name} rewritten "
-                            f"{sorted(removed)} → {sorted(added)}"
-                        ),
-                        severity=Severity.CRITICAL,
-                        path=path,
-                        line=getattr(new_node, "lineno", None),
-                        evidence={"removed": sorted(removed), "added": sorted(added)},
-                    )
-                )
-
-        # Newly added skip/xfail is covered by net_new() above (pre-existing
-        # skips are subtracted; a skip added in this edit stays).
+        # Ignore unchanged checks before pairing replacements.
+        old_remaining = list(old_checks)
+        new_remaining = []
+        for check in new_checks:
+            match = next((i for i, old_check in enumerate(old_remaining)
+                          if ast.dump(old_check) == ast.dump(check)), None)
+            if match is None:
+                new_remaining.append(check)
+            else:
+                old_remaining.pop(match)
+        for before, after in zip(old_remaining, new_remaining):
+            kind = _change_kind(before, after, old_name != name)
+            if kind == "assertion-weakened" and any(
+                f.line == after.lineno and f.kind in {"assert-true", "tautology"} for f in findings
+            ):
+                continue
+            if kind == "expected-value-changed" and old_n != new_n:
+                continue
+            if kind:
+                findings.append(Finding(
+                    kind=kind, message=f"{messages[kind]} in {name}",
+                    severity=Severity.WARNING if kind == "expected-value-changed" else Severity.CRITICAL,
+                    path=path, line=after.lineno,
+                ))
 
     return apply_waivers(findings, new)
 

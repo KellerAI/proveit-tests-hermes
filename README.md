@@ -128,8 +128,8 @@ If a future Hermes build stops putting file contents in write/patch args, pre-ed
   task-runner configs other than tox (`Makefile`, `package.json`, `noxfile.py`), and a config file
   that no longer parses (no claim is made). JS runner configs (`jest.config.*`, `vitest.config.*`) are
   not watched.
-- Widening a `pytest.raises(...)` expectation (for example to `pytest.raises(Exception)`) is not
-  flagged yet. This is a known gap from Sachin's fast pass and is not addressed in this release.
+- Exception widening checks recognize direct `pytest.raises` calls, explicit tuple widening,
+  and broad built-in exception types. Exception hierarchies and aliases are unresolved.
 
 ## Development (no Hermes required)
 
