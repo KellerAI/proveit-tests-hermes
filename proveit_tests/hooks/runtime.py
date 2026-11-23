@@ -40,18 +40,11 @@ import os
 from pathlib import Path
 from typing import Any
 
-from ..detectors.commands import detect_ci_diff, detect_command_weakenings
-from ..detectors.js_ts import detect_js_ts_diff
-from ..detectors.paths import is_ci_path, is_test_path
-from ..detectors.python_ast import detect_python_diff
-from ..detectors.pytest_config import (
-    detect_command_lines_diff,
-    detect_conftest_diff,
-    detect_pytest_config_diff,
-    is_conftest_path,
-    is_pytest_config_path,
-)
-from ..findings import Finding
+from ..detectors.commands import detect_command_weakenings
+from ..engine.files import FileAnalyzer
+from ..engine.gitdiff import Comparison, InspectionError, Repository
+from ..engine.ship import ShipCommand, commit_tracks_worktree, ship_base, ship_commands
+from ..findings import Finding, Severity
 from ..modes import Mode, resolve_mode
 from ..receipts.ledger import Ledger
 from .cron import CronProbe, NullCronProbe
@@ -100,34 +93,31 @@ def _read_disk(path: str) -> str:
         return ""
 
 
-def _ext(path: str) -> str:
-    return Path(path).suffix.lower()
-
-
 def _identity(f: Finding) -> tuple[str, str, str, str]:
     """Stable identity for an outstanding finding (line numbers excluded, since
     unrelated edits can shift them)."""
     return (f.kind, f.path or "<command>", f.message, f.detail)
 
 
-class ProveItRuntime:
+class ProveItRuntime(FileAnalyzer):
     def __init__(
         self,
         *,
-        mode: Mode | str = Mode.OBSERVE,
+        mode: Mode | str = Mode.BLOCK,
         ledger_dir: str | Path | None = None,
         cron: CronProbe | None = None,
         test_globs: list[str] | None = None,
         ci_globs: list[str] | None = None,
         one_shot_nudge: bool = True,
         session_id: str = "",
+        cwd: str | Path | None = None,
     ):
         self.mode = resolve_mode(mode.value if isinstance(mode, Mode) else mode)
         self.cron = cron or NullCronProbe()
-        self.test_globs = test_globs
-        self.ci_globs = ci_globs
+        super().__init__(test_globs, ci_globs)
         self.one_shot_nudge = one_shot_nudge
         self.session_id = session_id
+        self.cwd = cwd
         if ledger_dir is None:
             # Fail closed: no sanctioned plugin data dir -> in-memory ledger,
             # never a shared temp dir.
@@ -159,32 +149,6 @@ class ProveItRuntime:
         self.last_test_summary: str = ""
 
     # ------------------------------------------------------------------ analyze
-    def analyze_file_change(self, path: str, old: str, new: str) -> list[Finding]:
-        findings: list[Finding] = []
-        if is_test_path(path, self.test_globs):
-            ext = _ext(path)
-            if ext == ".py":
-                findings.extend(detect_python_diff(old, new, path=path))
-            elif ext in {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"}:
-                findings.extend(detect_js_ts_diff(old, new, path=path))
-        if is_ci_path(path, self.ci_globs):
-            findings.extend(detect_ci_diff(old, new, path=path))
-            findings.extend(detect_command_lines_diff(old, new, path=path))
-        if is_pytest_config_path(path):
-            findings.extend(detect_pytest_config_diff(old, new, path=path))
-        if is_conftest_path(path):
-            findings.extend(detect_conftest_diff(old, new, path=path))
-        return findings
-
-    def is_watched_path(self, path: str) -> bool:
-        """Test files, CI configs, pytest config files, and conftest.py."""
-        return (
-            is_test_path(path, self.test_globs)
-            or is_ci_path(path, self.ci_globs)
-            or is_pytest_config_path(path)
-            or is_conftest_path(path)
-        )
-
     def analyze_command(self, command: str) -> list[Finding]:
         return detect_command_weakenings(command)
 
@@ -266,25 +230,78 @@ class ProveItRuntime:
         # weakening rule rather than blanket-approving every write_file call.
         rule_key = "proveit-tests:test-weakening"
         unattended = self.cron.is_unattended()
-        if self.mode == Mode.OBSERVE:
+        if self.mode == Mode.WARN:
             return None
-        if self.mode == Mode.BLOCK_UNATTENDED and unattended:
+        if self.mode == Mode.BLOCK:
+            if not unattended and any(f.tier == "block" for f in open_findings):
+                return {"action": "approve", "message": msg, "rule_key": rule_key}
+            return None
+        if unattended:
             return {
                 "action": "block",
                 "message": msg + " [blocked: unattended/cron]",
                 "rule_key": rule_key,
             }
-        if self.mode == Mode.BLOCK_UNATTENDED and not unattended:
-            return {"action": "approve", "message": msg, "rule_key": rule_key}
-        if self.mode == Mode.ESCALATE:
-            if unattended:
-                return {
-                    "action": "block",
-                    "message": msg + " [blocked: unattended/cron]",
-                    "rule_key": rule_key,
-                }
-            return {"action": "approve", "message": msg, "rule_key": rule_key}
-        return None
+        return {"action": "approve", "message": msg, "rule_key": rule_key}
+
+    def _ship_decision(self, command: ShipCommand, terminal_findings: list[Finding]) -> dict | None:
+        comparison = Comparison(None, None, [])
+        try:
+            if command.name == "pr merge":
+                comparison.findings.append(Finding(
+                    "ship-merge-approval", "Pull request merge requires human approval",
+                    Severity.WARNING,
+                ))
+                if command.directory:
+                    try:
+                        comparison.head_sha = Repository(command.directory).resolve("HEAD", optional=True)
+                    except InspectionError:
+                        pass
+            else:
+                if command.uncertain:
+                    raise InspectionError("Run the ship command separately from prior commands or Git overrides")
+                if command.directory is None:
+                    raise InspectionError("Pass workdir for the repository")
+                try:
+                    repo = Repository(command.directory)
+                except InspectionError:
+                    raise InspectionError("Pass workdir for a local Git repository") from None
+                if command.name == "commit":
+                    comparison = repo.compare(staged=True, tracked=commit_tracks_worktree(command.options), analyzer=self)
+                else:
+                    comparison = repo.compare(ship_base(repo, command), analyzer=self)
+        except (InspectionError, OSError, UnicodeError, ValueError) as error:
+            comparison.findings.append(Finding(
+                "ship-inspection-failed", str(error) if isinstance(error, InspectionError)
+                else "Could not inspect the Git range", Severity.CRITICAL,
+            ))
+
+        findings = comparison.findings + terminal_findings
+        active = [finding for finding in findings if not finding.waived]
+        blocking = any(finding.tier == "block" for finding in active)
+        unattended = bool(active) and self.cron.is_unattended()
+        hard_block = unattended or (self.mode == Mode.BLOCK and blocking)
+        if self.mode == Mode.WARN:
+            hard_block = False
+        verdict = "BLOCK" if hard_block or blocking else "REVIEW" if active else "CLEAN"
+        receipt = self.ledger.record(findings, session_id=self.session_id, mode=self.mode.value, meta={
+            "verdict": verdict, "ship_point": command.name,
+            "base_sha": comparison.base_sha, "head_sha": comparison.head_sha,
+        })
+        self._last_receipt_digest = receipt.digest
+        if not active:
+            return None
+        summary = "\n".join(f"- {f.short()}" for f in active)
+        message = (
+            f"ProveIt Tests {verdict} for {command.name} (receipt {receipt.digest[:12]}).\n{summary}"
+        )
+        if any(f.kind not in {"ship-inspection-failed", "ship-merge-approval"} for f in active):
+            message += "\nFix the code under test, or add `# proveit: intended <reason>` for human review."
+        if self.mode == Mode.WARN:
+            self._pending_warnings.append(message)
+            return None
+        return {"action": "block" if hard_block else "approve", "message": message,
+                "rule_key": "proveit-tests:test-weakening"}
 
     # ------------------------------------------------------------------- hooks
     def on_pre_tool_call(
@@ -298,6 +315,19 @@ class ProveItRuntime:
             cmd = _extract_command(args)
             if cmd:
                 findings.extend(self.analyze_command(cmd))
+                cwd = args.get("workdir") or kwargs.get("cwd") or kwargs.get("workdir") or self.cwd or os.getcwd()
+                ships = ship_commands(cmd, cwd)
+                if ships:
+                    decisions = [self._ship_decision(ship, findings) for ship in ships]
+                    directives = [decision for decision in decisions if decision]
+                    if directives:
+                        directive = dict(directives[0])
+                        if any(decision["action"] == "block" for decision in directives):
+                            directive["action"] = "block"
+                        directive["message"] = "\n".join(decision["message"] for decision in directives)
+                        return directive
+                    return None
+
                 # Snapshot watched files the command names, so post_tool_call can
                 # diff against real prior content instead of guessing.
                 for token in self._watched_tokens(cmd):

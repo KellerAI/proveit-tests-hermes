@@ -28,10 +28,11 @@ class Finding:
     waiver_reason: str = ""
     evidence: dict[str, Any] = field(default_factory=dict, hash=False, compare=False)
 
-    tier: Tier = field(init=False)
+    tier: Tier | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "tier", finding_tier(self.kind))
+        if self.tier is None:
+            object.__setattr__(self, "tier", finding_tier(self.kind))
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)

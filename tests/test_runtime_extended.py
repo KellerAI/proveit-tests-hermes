@@ -17,8 +17,8 @@ from proveit_tests.receipts.ledger import Ledger
 
 
 def test_resolve_mode_defaults():
-    assert resolve_mode(None) == Mode.OBSERVE
-    assert resolve_mode("") == Mode.OBSERVE
+    assert resolve_mode(None) == Mode.BLOCK
+    assert resolve_mode("") == Mode.BLOCK
     assert resolve_mode("WARN") == Mode.OBSERVE
     assert resolve_mode("approve") == Mode.ESCALATE
 

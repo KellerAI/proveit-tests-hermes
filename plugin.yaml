@@ -8,9 +8,8 @@ description: >-
   CI continue-on-error), and pytest config / conftest.py narrowing (addopts
   -k/-m/--deselect/--ignore, testpaths, collect_ignore, deselecting hooks). Net-new only: each edit is compared with the file
   as it was before, so pre-existing skips are not blamed on the edit.
-  Deterministic AST + regex — no LLM. Modes: observe
-  (default), escalate to the human-approval gate, or block on unattended/cron
-  runs. Durable SHA-256 receipts and a /proveit-tests ledger. Python-strong;
+  Deterministic AST + regex — no LLM. Modes: block at ship points by default, escalate for human approval,
+  or warn. Reads Git diffs locally. Durable SHA-256 receipts and a /proveit-tests ledger. Python-strong;
   JS/TS coverage is heuristic and limited. Disclosure (rule 13): local-only,
   reads edited test, CI, pytest-config and conftest.py files and tool args to compare before/after; appends
   warnings into tool results; may escalate or block tool calls when configured.
@@ -37,8 +36,10 @@ provides_commands:
 config_schema:
   mode:
     type: str
-    default: observe
-    description: "observe | escalate | block_unattended (block only when cron/unattended; otherwise escalate)"
+    label: Enforcement mode
+    default: block
+    choices: [block, escalate, warn]
+    description: "Block at ship points, escalate to human approval, or warn."
     required: false
   test_path_globs:
     type: list

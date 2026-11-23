@@ -16,6 +16,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
+from ..engine.policy import canonical_kind
 from ..findings import Finding
 
 log = logging.getLogger("proveit_tests.ledger")
@@ -227,10 +228,11 @@ class Ledger:
             return "ProveIt ledger empty — no weakenings recorded this session." + note
         lines = [f"ProveIt ledger ({len(self._memory)} receipt(s)):{note}"]
         for r in self._memory[-20:]:
-            kinds = sorted({f.get("kind", "?") for f in r.findings if not f.get("waived")})
+            kinds = sorted({canonical_kind(f.get("kind", "?")) for f in r.findings if not f.get("waived")})
             lines.append(
                 f"  · {r.digest[:12]}  open={r.open_count} waived={r.waived_count} "
                 f"kinds={','.join(kinds) or '-'} mode={r.mode}"
+                + (f" verdict={r.meta['verdict']}" if "verdict" in r.meta else "")
             )
         latest = self._memory[-1]
         lines.append(latest.footer())

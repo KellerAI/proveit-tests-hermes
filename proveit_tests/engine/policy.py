@@ -8,11 +8,14 @@ Tier = Literal["block", "review"]
 # Every other detector kind reports a blocking integrity signal.
 _REVIEW_KINDS = {
     "expected-value-changed",
-    "expected-literal-rewrite",  # Historical receipt identifier.
     "js-expected-literal-rewrite",
     "ship-merge-approval",
 }
 
 
-def finding_tier(kind: str) -> Tier:
-    return "review" if kind in _REVIEW_KINDS else "block"
+def canonical_kind(kind: str) -> str:
+    return "expected-value-changed" if kind == "expected-literal-rewrite" else kind
+
+
+def finding_tier(kind: str, *, new_waiver: bool = False) -> Tier:
+    return "review" if new_waiver or canonical_kind(kind) in _REVIEW_KINDS else "block"

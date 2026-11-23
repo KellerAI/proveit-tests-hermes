@@ -205,7 +205,7 @@ def _command_line_findings(text: str, path: str) -> list[Finding]:
             continue
         for f in detect_command_weakenings(line):
             out.append(Finding(kind=f.kind, message=f.message + " (in config file)", severity=f.severity,
-                               path=path, line=i, detail=" ".join(line.split())[:200]))
+                               path=path, line=i, detail=f.detail))
     return out
 
 

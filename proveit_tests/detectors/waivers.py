@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from typing import Iterable
 
 from ..findings import Finding
@@ -32,33 +33,14 @@ def apply_waivers(findings: Iterable[Finding], source: str, window: int = 6) -> 
     line number.
     """
     waivers = extract_waivers(source)
-    if not waivers:
-        return list(findings)
-    result: list[Finding] = []
-    for f in findings:
-        reason = ""
-        if f.line is not None:
-            candidates = [f.line, f.line - 1] + list(range(f.line + 1, f.line + 1 + window))
-            for ln in candidates:
-                if ln in waivers:
-                    reason = waivers[ln]
-                    break
-        elif 1 in waivers:
-            reason = waivers[1]
-        if reason:
-            result.append(
-                Finding(
-                    kind=f.kind,
-                    message=f.message,
-                    severity=f.severity,
-                    path=f.path,
-                    line=f.line,
-                    detail=f.detail,
-                    waived=True,
-                    waiver_reason=reason,
-                    evidence=dict(f.evidence),
-                )
-            )
-        else:
-            result.append(f)
+    result = []
+    for finding in findings:
+        line = waiver_line(finding, waivers, window)
+        result.append(replace(finding, waived=True, waiver_reason=waivers[line]) if line else finding)
     return result
+
+
+def waiver_line(finding: Finding, waivers: dict[int, str], window: int = 6) -> int | None:
+    line = finding.line
+    candidates = [1] if line is None else [line, line - 1, *range(line + 1, line + 1 + window)]
+    return next((candidate for candidate in candidates if candidate in waivers), None)
