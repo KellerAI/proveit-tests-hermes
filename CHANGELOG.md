@@ -23,6 +23,12 @@ patterns warned, three confirmed bugs). Thanks, Sachin.
 
 ### Fixed
 
+- Detect expected-expression replacements in Python comparisons and unittest
+  assertion calls. Renamed tests with a changed expectation are blocked, and
+  in-place rewrites are sent for review.
+- Make receipt confinement and persistence tests portable to Windows while
+  retaining the POSIX permission checks.
+
 - **Fully waived batches now reach the ledger.** `ProveItRuntime.decide` returned before
   `Ledger.record` when every finding was waived, which broke the "logged, not silent" promise.
   Every non-empty batch is now recorded; warn and escalate are still suppressed when nothing is

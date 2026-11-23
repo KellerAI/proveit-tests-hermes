@@ -42,7 +42,7 @@ class MockHermesCtx:
         return self._cron
 
     def plugin_data_dir(self):
-        return str(self._data_dir) if self._data_dir else "/tmp/proveit-mock-data"
+        return str(self._data_dir) if self._data_dir else None
 
 
 def test_register_observe_write_file_warns(tmp_path):

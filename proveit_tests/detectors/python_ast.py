@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ast
 import re
+from copy import deepcopy
 
 from ..findings import Finding, Severity
 from .netnew import net_new
@@ -101,15 +102,45 @@ def _assert_true_lines(source: str) -> list[int]:
     return lines
 
 
-def _shape(node: ast.AST):
-    if isinstance(node, ast.Constant):
-        return ast.Constant, "_"
-    return type(node), tuple(
-        _shape(value) if isinstance(value, ast.AST)
-        else tuple(_shape(item) if isinstance(item, ast.AST) else item for item in value)
-        if isinstance(value, list) else value
-        for _, value in ast.iter_fields(node)
-    )
+_TWO_OPERAND_ASSERTIONS = {
+    "assertEqual", "assertEquals", "assertNotEqual", "assertAlmostEqual",
+    "assertNotAlmostEqual", "assertIs", "assertIsNot", "assertIn", "assertNotIn",
+    "assertGreater", "assertGreaterEqual", "assertLess", "assertLessEqual",
+    "assertCountEqual", "assertDictEqual", "assertListEqual", "assertTupleEqual",
+    "assertSetEqual", "assertSequenceEqual", "assertMultiLineEqual",
+}
+
+
+def _expected_argument(check: ast.AST) -> ast.AST | None:
+    if isinstance(check, ast.Call):
+        name = getattr(check.func, "attr", getattr(check.func, "id", ""))
+        if name in _TWO_OPERAND_ASSERTIONS and len(check.args) >= 2:
+            return check.args[1]
+    return None
+
+
+def _expectations(check: ast.AST) -> tuple:
+    if isinstance(check, ast.Assert):
+        return tuple(
+            (tuple(map(type, node.ops)), tuple(map(ast.dump, node.comparators)))
+            for node in ast.walk(check.test) if isinstance(node, ast.Compare)
+        )
+    argument = _expected_argument(check)
+    if argument is not None:
+        return ((ast.dump(check.func), (ast.dump(argument),)),)
+    return ()
+
+
+def _without_expectation(check: ast.AST) -> str:
+    # Work on a copy so later checks still see the original operands.
+    normalized = deepcopy(check)
+    if isinstance(normalized, ast.Assert):
+        for node in list(ast.walk(normalized.test)):
+            if isinstance(node, ast.Compare):
+                node.comparators = []
+    elif _expected_argument(normalized) is not None:
+        normalized.args[1] = ast.Constant("_")
+    return ast.dump(normalized)
 
 
 def _comparison(check: ast.AST) -> ast.cmpop | None:
@@ -149,7 +180,13 @@ def _change_kind(old: ast.AST, new: ast.AST, renamed: bool) -> str | None:
             == ast.dump(ast.Tuple(elts=new.args[1:] + new.keywords))
         )
     else:
-        expected_change = _strong(old) and _shape(old) == _shape(new)
+        expected_change = any(
+            old_operator == new_operator and old_expected != new_expected
+            for (old_operator, old_expected), (new_operator, new_expected)
+            in zip(_expectations(old), _expectations(new))
+        )
+        if renamed and expected_change:
+            expected_change = _without_expectation(old) == _without_expectation(new)
     if expected_change and ast.dump(old) != ast.dump(new):
         return "renamed-test-changed-expectation" if renamed else "expected-value-changed"
     return None
@@ -163,6 +200,8 @@ def _renamed_shape(node: ast.AST):
             statement.test = ast.Constant("_")
         elif _raises(statement):
             statement.args = []
+        elif _expected_argument(statement) is not None:
+            statement.args[1] = ast.Constant("_")
     return (
         type(node), ast.dump(node.args), tuple(map(ast.dump, node.decorator_list)),
         tuple(map(ast.dump, body)),
@@ -358,13 +397,28 @@ def detect_python_diff(old: str, new: str, path: str = "") -> list[Finding]:
                 new_remaining.append(check)
             else:
                 old_remaining.pop(match)
-        for before, after in zip(old_remaining, new_remaining):
+        # Match checks with the same actual operand and operator first, even
+        # when another assertion was inserted, removed or reordered.
+        replacements = []
+        unmatched = []
+        old_keys = [_without_expectation(check) for check in old_remaining]
+        for check in new_remaining:
+            key = _without_expectation(check)
+            if key in old_keys:
+                match = old_keys.index(key)
+                old_keys.pop(match)
+                replacements.append((old_remaining.pop(match), check))
+            else:
+                unmatched.append(check)
+        for before, after in replacements + list(zip(old_remaining, unmatched)):
             kind = _change_kind(before, after, old_name != name)
             if kind == "assertion-weakened" and any(
                 f.line == after.lineno and f.kind in {"assert-true", "tautology"} for f in findings
             ):
                 continue
-            if kind == "expected-value-changed" and old_n != new_n:
+            if kind == "expected-value-changed" and old_n != new_n and (
+                _without_expectation(before) != _without_expectation(after)
+            ):
                 continue
             if kind:
                 findings.append(Finding(

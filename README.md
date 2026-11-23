@@ -94,7 +94,7 @@ uses the PR version. Other repositories can pin a trusted detector commit with
 
 | Tier | Detector rules |
 |---|---|
-| Review | `expected-value-changed` for in-place assertion literal changes and single-exception substitutions, heuristic `js-expected-literal-rewrite`, and ship findings with newly added waivers. PR merge commands also require review. |
+| Review | `expected-value-changed` for in-place expected expression changes and single-exception substitutions, heuristic `js-expected-literal-rewrite`, and ship findings with newly added waivers. PR merge commands also require review. |
 | Block | All other detector rules, including deleted tests and watched files, assertion removal or weakening, renamed tests with changed expectations, assertionless or syntactically broken Python tests, skip/xfail/`.only`, tautologies, swallowed failures, runner escape hatches, CI soft-fail, pytest configuration and collection-hook narrowing, and failed ship inspection. |
 
 A value correction and a rewrite that masks a bug can produce the same diff. Reviewers can compare
@@ -131,7 +131,7 @@ the `-k` expression does. A `# proveit: intended <reason>` comment can request h
 - Runs read-only `git` subprocesses with a minimal environment to compare local Git contents.
 - May **append warnings** into tool results (`transform_tool_result`).
 - May **escalate or block** tool calls according to the selected mode.
-- Writes a **SHA-256 receipt ledger** (`receipts.jsonl`, dir `0700`, file `0600`) only under the Hermes plugin data directory (`$HERMES_HOME/plugin-data/proveit-tests/`). `receipt_dir` can only pick a subdirectory inside it; it cannot point the ledger elsewhere.
+- Writes a **SHA-256 receipt ledger** (`receipts.jsonl`) only under the Hermes plugin data directory (`$HERMES_HOME/plugin-data/proveit-tests/`). POSIX creation modes are `0700` for the directory and `0600` for the file. On Windows, the ledger file uses the directory’s inherited permissions. `receipt_dir` can only pick a subdirectory inside it; it cannot point the ledger elsewhere.
 - If Hermes provides no plugin data directory, the ledger **fails closed to in-memory only** (logged warning; `/proveit-tests` says "in-memory only") — nothing is written to `/tmp` or any other shared location.
 - **Terminal findings may retain a short excerpt of the command text locally** (≤200 chars) in that ledger as evidence. Secret-looking substrings (URL credentials, `Authorization`/bearer values, `*_TOKEN=`/`*PASSWORD=`-style env assignments, `--token`/`--password`/`--api-key` flags, common token prefixes like `ghp_`/`sk-`/`AKIA`, long opaque strings) are redacted first. Redaction is best-effort: an unusual secret format can survive, so avoid inlining credentials in test commands.
 - **Not a sandbox and not unbypassable.** An agent can still rewrite files via novel shell indirections, edit outside watched globs, disable the plugin, or invent new weakenings. Treat findings as signals, not proof of malice or of safety.

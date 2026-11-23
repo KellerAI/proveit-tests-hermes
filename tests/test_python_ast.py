@@ -85,13 +85,14 @@ def test_legit_move_assert():
     assert not any(x.kind == "removed-assert" and not x.waived for x in f)
 
 
-def test_legit_add_test():
+def test_add_tautological_test():
     f = detect_python_diff(
-        _read("legit/add_test_old.py"),
-        _read("legit/add_test_new.py"),
+        _read("cheats/add_tautological_test_old.py"),
+        _read("cheats/add_tautological_test_new.py"),
         path="test_suite.py",
     )
     assert not any(x.kind == "deleted-test" for x in f)
+    assert [(x.kind, x.tier) for x in f] == [("tautology", "block")]
 
 
 def test_waiver_marks_skip():

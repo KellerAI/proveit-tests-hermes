@@ -25,6 +25,7 @@ def repo():
     with TemporaryDirectory(prefix="proveit git ") as directory:
         root = Path(directory)
         git(root, "init", "-q", "-b", "main")
+        git(root, "config", "core.autocrlf", "false")
         (root / "test_total space.py").write_bytes(TEST.encode())
         (root / "src.py").write_text("def total(): return 3\n", encoding="utf-8")
         git(root, "add", ".")

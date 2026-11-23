@@ -36,7 +36,7 @@ def test_bug1_fully_waived_batch_is_logged_not_silent(tmp_path):
     r = receipts[0]
     assert (r.open_count, r.waived_count) == (0, 1)
     assert r.findings[0]["waiver_reason"] == "demo fixture"
-    on_disk = [json.loads(x) for x in (ledger_dir / "receipts.jsonl").read_text().splitlines()]
+    on_disk = [json.loads(x) for x in (ledger_dir / "receipts.jsonl").read_text(encoding="utf-8").splitlines()]
     assert len(on_disk) == 1 and on_disk[0]["waived_count"] == 1
     assert rt._unexplained == []
 

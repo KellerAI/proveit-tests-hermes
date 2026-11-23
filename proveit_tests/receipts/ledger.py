@@ -140,7 +140,8 @@ def build_receipt(
 class Ledger:
     """Append-only JSONL ledger on disk, or in-memory when ``directory`` is None.
 
-    On disk the directory is created 0700 and the file 0600 (owner-only).
+    On POSIX the directory is created with mode 0700 and the file with 0600.
+    On Windows the file uses access controls inherited from its directory.
     """
 
     def __init__(self, directory: str | Path | None):

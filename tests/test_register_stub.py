@@ -6,7 +6,8 @@ import importlib
 
 
 class FakeCtx:
-    def __init__(self):
+    def __init__(self, data_dir):
+        self._data_dir = data_dir
         self.hooks = []
         self.commands = []
         self.settings = {"mode": "observe"}
@@ -21,10 +22,10 @@ class FakeCtx:
         return None
 
     def plugin_data_dir(self):
-        return "/tmp/proveit-fake-data"
+        return str(self._data_dir)
 
 
-def test_register_wires_expected_hooks():
+def test_register_wires_expected_hooks(tmp_path):
     mod = importlib.import_module("__init__") if False else None
     # Load package root __init__ as the plugin module
     import sys
@@ -39,7 +40,7 @@ def test_register_wires_expected_hooks():
 
     plugin = load_plugin_like_hermes("proveit_tests_plugin")
 
-    ctx = FakeCtx()
+    ctx = FakeCtx(tmp_path)
     plugin.register(ctx)
     names = {h[0] for h in ctx.hooks}
     assert names == {
