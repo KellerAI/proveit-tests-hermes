@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass, replace
 from difflib import SequenceMatcher
 import os
@@ -40,6 +41,15 @@ class Comparison:
     findings: list[Finding]
 
 
+@dataclass(frozen=True)
+class FileChange:
+    status: str
+    old_path: str
+    path: str
+    old: str
+    new: str | None
+
+
 class Repository:
     def __init__(self, directory: str | Path):
         self.root = Path(directory)
@@ -61,6 +71,7 @@ class Repository:
 
     def read(self, *args: str) -> str:
         data = self.run(*args)
+        assert data is not None
         try:
             return data.decode("utf-8")
         except UnicodeDecodeError as error:
@@ -79,7 +90,11 @@ class Repository:
         return self.read("symbolic-ref", f"refs/remotes/{remote}/HEAD").strip()
 
     def merge_base(self, ref: str, head: str = "HEAD") -> str:
-        return self.read("merge-base", self.resolve(ref), self.resolve(head)).strip()
+        base_sha = self.resolve(ref)
+        head_sha = self.resolve(head)
+        if base_sha is None or head_sha is None:
+            raise InspectionError("Could not resolve merge base inputs")
+        return self.read("merge-base", base_sha, head_sha).strip()
 
     def compare(
         self, base: str = "HEAD", head: str = "HEAD", *, staged: bool = False,
@@ -88,6 +103,22 @@ class Repository:
         analyzer = analyzer or FileAnalyzer()
         head_sha = self.resolve("HEAD" if staged else head, optional=staged)
         base_sha = head_sha if staged else self.resolve(base)
+        findings = []
+        for change in self.changed_files(base_sha, head_sha, staged, tracked, analyzer):
+            if change.new is None:
+                findings.append(Finding(
+                    kind="deleted-test-file", message="Watched file removed",
+                    severity=Severity.CRITICAL, path=change.old_path,
+                ))
+            else:
+                findings.extend(_diff_findings(analyzer, change.path, change.old, change.new))
+        return Comparison(base_sha, head_sha, findings)
+
+    def changed_files(
+        self, base_sha: str | None, head_sha: str | None, staged: bool,
+        tracked: bool, analyzer: FileAnalyzer,
+    ) -> Iterator[FileChange]:
+        """Yield watched changes and their content from the resolved snapshots."""
         args = ["diff", "--name-status", "-z", "-M", "--no-ext-diff", "--no-textconv",
                 "--diff-filter=ADMRT"]
         if staged:
@@ -97,6 +128,8 @@ class Repository:
             if base_sha:
                 args.append(base_sha)
         else:
+            if base_sha is None or head_sha is None:
+                raise InspectionError("Both commit snapshots are required")
             args.extend([base_sha, head_sha])
         args.append("--")
         fields = iter(self.read(*args).split("\0")[:-1])
@@ -113,7 +146,6 @@ class Repository:
                 ("M", path, path) for path in self.read("ls-files", "-z").split("\0")[:-1]
                 if path not in changed
             )
-        findings = []
         for status, before, after in changes:
             old_watched = analyzer.is_watched_path(before)
             new_watched = analyzer.is_watched_path(after)
@@ -121,7 +153,10 @@ class Repository:
                 continue
             if status == "T":
                 raise InspectionError("A watched path changed file type")
-            old = self.read("show", f"{base_sha}:{before}") if base_sha and status != "A" else ""
+            old = self.read("show", f"{base_sha}:{before}") if base_sha and old_watched and status != "A" else ""
+            if old_watched and not new_watched:
+                yield FileChange(status[0], before, after, old, None)
+                continue
             if staged and tracked and status != "D":
                 new = self._working_content(after)
                 deleted = new is None
@@ -129,17 +164,13 @@ class Repository:
                 deleted = status == "D"
                 prefix = "" if staged else head_sha
                 new = "" if deleted else self.read("show", f"{prefix}:{after}")
-            if deleted or (old_watched and not new_watched):
-                if old_watched and (status != "A"):
-                    findings.append(Finding(
-                        kind="deleted-test-file", message="Watched file removed",
-                        severity=Severity.CRITICAL, path=before,
-                    ))
+            if deleted:
+                if old_watched and status != "A":
+                    yield FileChange(status[0], before, after, old, None)
                 continue
             old = old if old_watched else ""
-            if old.replace("\r\n", "\n") != new.replace("\r\n", "\n"):
-                findings.extend(_diff_findings(analyzer, after, old, new))
-        return Comparison(base_sha, head_sha, findings)
+            if status != "M" or old.replace("\r\n", "\n") != new.replace("\r\n", "\n"):
+                yield FileChange(status[0], before, after, old, new)
 
     def _working_content(self, path: str) -> str | None:
         file = self.root / path

@@ -1,12 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - Classify in-place expected-value changes as review items and block recognizable
   assertion weakening, including direct exception widening and renamed tests
   with changed expectations.
 - Gate commit, push and pull request commands against local Git changes. Block
   recognizable weakening by default and send new waivers to human review.
+
+- Add a CI command with text, JSON and GitHub annotations, and a pull request
+  workflow that checks changes with the base branch's detector.
 
 ### Repository
 

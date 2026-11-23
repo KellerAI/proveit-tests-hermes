@@ -284,16 +284,21 @@ class ProveItRuntime(FileAnalyzer):
         if self.mode == Mode.WARN:
             hard_block = False
         verdict = "BLOCK" if hard_block or blocking else "REVIEW" if active else "CLEAN"
-        receipt = self.ledger.record(findings, session_id=self.session_id, mode=self.mode.value, meta={
-            "verdict": verdict, "ship_point": command.name,
-            "base_sha": comparison.base_sha, "head_sha": comparison.head_sha,
-        })
-        self._last_receipt_digest = receipt.digest
+        try:
+            receipt = self.ledger.record(findings, session_id=self.session_id, mode=self.mode.value, meta={
+                "verdict": verdict, "ship_point": command.name,
+                "base_sha": comparison.base_sha, "head_sha": comparison.head_sha,
+            })
+            self._last_receipt_digest = receipt.digest
+            receipt_note = f"receipt {receipt.digest[:12]}"
+        except OSError:
+            logging.getLogger("proveit_tests.ledger").warning("Could not persist ship point receipt")
+            receipt_note = "receipt persistence failed"
         if not active:
             return None
         summary = "\n".join(f"- {f.short()}" for f in active)
         message = (
-            f"ProveIt Tests {verdict} for {command.name} (receipt {receipt.digest[:12]}).\n{summary}"
+            f"ProveIt Tests {verdict} for {command.name} ({receipt_note}).\n{summary}"
         )
         if any(f.kind not in {"ship-inspection-failed", "ship-merge-approval"} for f in active):
             message += "\nFix the code under test, or add `# proveit: intended <reason>` for human review."

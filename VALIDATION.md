@@ -1,5 +1,8 @@
 # Validation
 
+Hermes was unavailable during 0.2.0 development. A real
+`hermes plugins validate` run is pending for this release.
+
 ## Pure-Python (no Hermes needed)
 
 ```bash

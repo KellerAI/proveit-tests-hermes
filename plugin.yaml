@@ -1,5 +1,5 @@
 name: proveit-tests
-version: 0.1.0
+version: 0.2.0
 description: >-
   Flags recognizable ways an agent weakens tests to reach green: removed or loosened asserts,
   skip/xfail/.only, deleted tests, expected literals rewritten to match failing

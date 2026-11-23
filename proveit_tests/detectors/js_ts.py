@@ -126,7 +126,6 @@ def detect_js_ts_diff(old: str, new: str, path: str = "") -> list[Finding]:
                     message="JS/TS expected literal appears rewritten",
                     severity=Severity.CRITICAL,
                     path=path,
-                    detail=f"removed={sorted(removed)[:3]} added={sorted(added)[:3]}",
                 )
             )
 

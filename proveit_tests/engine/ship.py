@@ -57,7 +57,7 @@ def _parse_segment(tokens, directory, prior_command, commands):
     if token == "env":
         token = next(tokens, "")
     while _ASSIGNMENT.match(token):
-        overrides |= token.startswith("GIT_")
+        overrides |= token.startswith("GIT_") or token.startswith(("GH_REPO=", "GH_HOST="))
         token = next(tokens, "")
     rest = list(tokens)
     if token == "cd" and len(rest) == 1 and not prior_command:
@@ -154,6 +154,8 @@ def ship_base(repo: Repository, command: ShipCommand) -> str:
                 return repo.resolve(ref)
         return repo.merge_base(repo.remote_default(remote))
 
+    if os.environ.get("GH_REPO"):
+        raise InspectionError("Unset GH_REPO before inspecting the local pull request range")
     args = iter(command.options)
     base = None
     for option in args:

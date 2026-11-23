@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import subprocess
 from tempfile import TemporaryDirectory
@@ -15,6 +16,7 @@ def git(repo, *args):
         ["git", "-C", str(repo), "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
          "-c", "commit.gpgsign=false", *args],
         text=True,
+        env={key: value for key, value in os.environ.items() if not key.startswith("GIT_")},
     ).strip()
 
 
@@ -146,3 +148,28 @@ def test_unknown_repo_fails_closed_but_warn_is_advisory(repo):
     advisory = ProveItRuntime(mode="warn")
     assert run(advisory, missing, "git commit") is None
     assert "workdir" in advisory.on_transform_tool_result(result="output")
+
+
+def test_renaming_tests_out_of_watch_paths_blocks(repo):
+    git(repo, "mv", "test_total space.py", "retired.py")
+    rt = ProveItRuntime()
+    result = run(rt, repo, "git commit")
+    assert result["action"] == "block"
+    assert "deleted-test-file @ test_total space.py" in result["message"]
+
+
+def test_ship_gate_checks_embedded_ci_commands(repo):
+    workflow = repo / ".github" / "workflows" / "checks.yml"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text("jobs:\n  tests:\n    steps:\n      - run: pytest || true\n", encoding="utf-8")
+    git(repo, "add", ".")
+    result = run(ProveItRuntime(), repo, "git commit")
+    assert result["action"] == "block"
+    assert "pytest-or-true" in result["message"]
+
+
+def test_chained_index_mutation_fails_closed(repo):
+    rt = ProveItRuntime()
+    result = run(rt, repo, "git add -A && git commit -m all")
+    assert result["action"] == "block"
+    assert "Run the ship command separately" in result["message"]

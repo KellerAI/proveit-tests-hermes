@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import ast
 import re
-from typing import Any
 
 from ..findings import Finding, Severity
 from .netnew import net_new
@@ -16,12 +15,6 @@ from .waivers import apply_waivers
 
 _TEST_NAME = re.compile(r"^(test_|Test)")
 _ASSERT_TRUE = re.compile(r"^\s*assert\s+True\b")
-_EXPECT_LITERAL_LOOSE = re.compile(
-    r"assert\s+.+\s*==\s*(.+)$|"
-    r"self\.assertEqual\([^,]+,\s*(.+)\)|"
-    r"self\.assertEquals\([^,]+,\s*(.+)\)",
-    re.M,
-)
 
 
 def _is_test_func(name: str) -> bool:
@@ -33,7 +26,7 @@ def _func_nodes(tree: ast.AST) -> dict[str, ast.AST]:
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and _is_test_func(node.name):
             out[node.name] = node
-        if isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
+        if isinstance(node, ast.ClassDef):
             for child in node.body:
                 if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and _is_test_func(child.name):
                     out[f"{node.name}.{child.name}"] = child
@@ -61,24 +54,20 @@ def _checks(node: ast.AST) -> list[ast.Assert | ast.Call]:
 
 
 def _raises(node: ast.AST) -> bool:
-    return isinstance(node, ast.Call) and ast.unparse(node.func) == "pytest.raises"
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "raises"
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "pytest"
+    )
 
 
 def _decorator_names(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
-    names: list[str] = []
-    for d in node.decorator_list:
-        names.append(ast.unparse(d) if hasattr(ast, "unparse") else _deco_fallback(d))
-    return names
-
-
-def _deco_fallback(d: ast.AST) -> str:
-    if isinstance(d, ast.Name):
-        return d.id
-    if isinstance(d, ast.Attribute):
-        return f"{_deco_fallback(d.value)}.{d.attr}"
-    if isinstance(d, ast.Call):
-        return _deco_fallback(d.func)
-    return type(d).__name__
+    return [
+        ast.unparse(decorator.func if isinstance(decorator, ast.Call) else decorator)
+        for decorator in node.decorator_list
+    ]
 
 
 def _has_skip_or_xfail(decorators: list[str]) -> list[str]:
@@ -176,7 +165,7 @@ def _renamed_shape(node: ast.AST):
             statement.args = []
     return (
         type(node), ast.dump(node.args), tuple(map(ast.dump, node.decorator_list)),
-        tuple(_shape(statement) for statement in body),
+        tuple(map(ast.dump, body)),
     )
 
 

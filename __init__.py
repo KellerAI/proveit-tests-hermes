@@ -25,7 +25,7 @@ else:  # pragma: no cover - pytest imports the rootdir __init__.py top-level
     from proveit_tests.modes import resolve_mode
     from proveit_tests.receipts.ledger import resolve_ledger_dir
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # Module-level runtime so slash command + hooks share state within a process.
 _RUNTIME: ProveItRuntime | None = None
