@@ -136,7 +136,7 @@ def test_register_without_data_dir_is_in_memory(tmp_path):
     plugin.register(ctx)
     assert "in-memory only" in ctx.commands["proveit-tests"]("")
 
-
+# proveit: intended renamed test_ledger_files_are_owner_only for posix+nt coverage
 def test_ledger_files_use_platform_storage_protection(tmp_path):
     d = tmp_path / "led"
     led = Ledger(d)

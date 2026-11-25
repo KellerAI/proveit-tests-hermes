@@ -85,6 +85,14 @@ def test_legit_move_assert():
     assert not any(x.kind == "removed-assert" and not x.waived for x in f)
 
 
+def test_legit_add_test():
+    old = "def test_a():\n    assert add(1, 1) == 2\n"
+    new = old + "\ndef test_b():\n    assert add(1, 2) == 3\n"
+    f = detect_python_diff(old, new, path="test_suite.py")
+    assert not any(x.kind == "deleted-test" for x in f)
+    assert [x for x in f if not x.waived] == []
+
+
 def test_add_tautological_test():
     f = detect_python_diff(
         _read("cheats/add_tautological_test_old.py"),
