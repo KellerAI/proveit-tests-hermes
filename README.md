@@ -1,5 +1,7 @@
 # ProveIt Tests for Hermes
 
+[![CI](https://github.com/KellerAI/proveit-tests-hermes/actions/workflows/ci.yml/badge.svg)](https://github.com/KellerAI/proveit-tests-hermes/actions/workflows/ci.yml)
+
 A green test run your agent did not fake.
 
 ```text
@@ -77,13 +79,15 @@ def test_flaky_network():
 ## CI mode
 
 ```bash
-python -m proveit_tests.ci --base BASE_REF [--head HEAD] [--repo .] [--format text|json|github] [--mode block|warn]
+python -m proveit_tests.ci --base BASE_REF [--head HEAD] [--repo .] [--format text|json|github|sarif] [--mode block|warn]
 ```
 
 Exit `0` means clean or review only, `1` means a block-tier finding in block
 mode, and `2` means the range could not be inspected. Warn mode reports findings
 without enforcing them. GitHub review annotations are warnings. JSON includes a
-`PASS`, `WARN`, or `BLOCK` verdict and stable finding IDs.
+`PASS`, `WARN`, or `BLOCK` verdict and stable finding IDs. SARIF emits valid
+SARIF 2.1.0 (`ruleId`, `level`, `locations`, `partialFingerprints.proveitFindingId/v1`,
+and `properties.tier`) for GitHub Code Scanning and third-party consumers.
 
 This repository's PR workflow runs the base branch detector when available. On
 the first upgrade from a base without the CI module, it prints a notice and
@@ -177,6 +181,18 @@ Settings under `plugins.entries.proveit-tests.settings` (also the Desktop settin
 | `one_shot_nudge` | `true` | `pre_verify` continues once when weakenings remain |
 
 pytest config files and `conftest.py` are always watched by filename.
+
+## Measured evaluation (offline, v0.2.0)
+
+| Metric | Result | Scope / caveat |
+|---|---|---|
+| Pure-Python unit & integration tests | `241 passed / 0 failed` | Local `pytest` suite (no live Hermes runtime required) |
+| Legitimate test fixes falsely blocked | `0/18` (down from `12/18` in v0.1.0) | Offline audit of 50 agent runs; all 18 route to `review` tier |
+| False positives on hard/clean runs | `0/32` | Offline audit of 50 agent runs |
+| Simulated planted cheats blocked | `156/156` (up from `119/156` in v0.1.0) | Optimistic: planted-cheat corpus is from the same tuning campaign |
+| Live-agent tampering sample | `0/0` | No agent tampered in the audited 50-run sample; live-model evaluation pending |
+
+Hosted 3-OS CI (`ubuntu-latest`, `macos-latest`, `windows-latest` × Python `3.11`, `3.13`) and a live `0.2.0` `hermes plugins validate` run are pending release merge.
 
 ## Development (no Hermes required)
 

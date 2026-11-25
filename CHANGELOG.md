@@ -8,8 +8,10 @@
 - Gate commit, push and pull request commands against local Git changes. Block
   recognizable weakening by default and send new waivers to human review.
 
-- Add a CI command with text, JSON and GitHub annotations, and a pull request
-  workflow that checks changes with the base branch's detector.
+- Add a CI command with text, JSON, GitHub annotations, and SARIF 2.1.0 output,
+  plus a pull request workflow that checks changes with the base branch's detector.
+- Align `plugin.yaml` and `pyproject.toml` with the outcome-first headline and
+  document offline evaluation metrics and caveats in `README.md` and `VALIDATION.md`.
 
 ### Repository
 
