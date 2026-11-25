@@ -1,5 +1,8 @@
 # Validation
 
+Hermes was unavailable during 0.2.0 development. A real
+`hermes plugins validate` run is pending for this release.
+
 ## Pure-Python (no Hermes needed)
 
 ```bash
@@ -8,7 +11,7 @@ python3 -m venv .venv && .venv/bin/pip install pytest pytest-cov
 .venv/bin/pytest --cov=proveit_tests --cov-report=term-missing -q
 ```
 
-Last run (2026-11-10 10:09 AM ET): **169 passed / 0 failed**, coverage `proveit_tests` **96%** (1068 stmts, 41 miss).
+Latest 0.2.0 run (2026-11-25 ET): **241 passed / 0 failed** (including ship-point gate, CI text/JSON/GitHub/SARIF 2.1.0, finding tiers, and cross-platform receipt tests). Prior v0.1.0 baseline (2026-11-10): 169 passed / 0 failed, 96% coverage.
 
 Includes:
 - `tests/test_hermes_integration_mock.py`: mock PluginContext (hooks, directives, receipts, `/proveit`).

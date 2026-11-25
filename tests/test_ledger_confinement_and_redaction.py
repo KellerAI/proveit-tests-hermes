@@ -7,6 +7,8 @@ import stat
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from proveit_tests.detectors.commands import detect_command_weakenings, redact_command
 from proveit_tests.hooks.runtime import ProveItRuntime
 from proveit_tests.modes import Mode
@@ -75,7 +77,12 @@ def test_symlink_escape_rejected(tmp_path):
     root.mkdir()
     outside = tmp_path / "outside"
     outside.mkdir()
-    (root / "link").symlink_to(outside)
+    try:
+        (root / "link").symlink_to(outside, target_is_directory=True)
+    except OSError as exc:
+        if os.name == "nt" and getattr(exc, "winerror", None) == 1314:
+            pytest.skip("Windows denied directory symlink creation because the privilege is unavailable")
+        raise
     assert resolve_ledger_dir(root, "link") == str(root)
     assert not (outside / "receipts.jsonl").exists()
 
@@ -129,13 +136,19 @@ def test_register_without_data_dir_is_in_memory(tmp_path):
     plugin.register(ctx)
     assert "in-memory only" in ctx.commands["proveit-tests"]("")
 
-
-def test_ledger_files_are_owner_only(tmp_path):
+# proveit: intended renamed test_ledger_files_are_owner_only for posix+nt coverage
+def test_ledger_files_use_platform_storage_protection(tmp_path):
     d = tmp_path / "led"
     led = Ledger(d)
-    led.record(detect_command_weakenings("pytest || true"))
-    assert stat.S_IMODE(os.stat(d).st_mode) == 0o700
-    assert stat.S_IMODE(os.stat(led.path).st_mode) == 0o600
+    receipt = led.record(detect_command_weakenings("pytest || true"))
+    assert led.path.resolve() == d.resolve() / "receipts.jsonl"
+    assert Ledger(d).latest() == receipt
+    if os.name == "posix":
+        assert stat.S_IMODE(d.stat().st_mode) == 0o700
+        assert stat.S_IMODE(led.path.stat().st_mode) == 0o600
+    elif os.name == "nt":
+        # Windows exposes the file's read-only attribute through stat.
+        assert led.path.stat().st_mode & stat.S_IWRITE
 
 
 # ------------------------------------------------------------------ redaction

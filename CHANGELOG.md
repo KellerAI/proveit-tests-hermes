@@ -1,6 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
+
+- Classify in-place expected-value changes as review items and block recognizable
+  assertion weakening, including direct exception widening and renamed tests
+  with changed expectations.
+- Gate commit, push and pull request commands against local Git changes. Block
+  recognizable weakening by default and send new waivers to human review.
+
+- Add a CI command with text, JSON, GitHub annotations, and SARIF 2.1.0 output,
+  plus a pull request workflow that checks changes with the base branch's detector.
+- Align `plugin.yaml` and `pyproject.toml` with the outcome-first headline and
+  document offline evaluation metrics and caveats in `README.md` and `VALIDATION.md`.
 
 ### Repository
 
@@ -13,6 +24,12 @@ Fixes from Sachin's independent fast pass against `2412a18` (169 passing, 4/4 sa
 patterns warned, three confirmed bugs). Thanks, Sachin.
 
 ### Fixed
+
+- Detect expected-expression replacements in Python comparisons and unittest
+  assertion calls. Renamed tests with a changed expectation are blocked, and
+  in-place rewrites are sent for review.
+- Make receipt confinement and persistence tests portable to Windows while
+  retaining the POSIX permission checks.
 
 - **Fully waived batches now reach the ledger.** `ProveItRuntime.decide` returned before
   `Ledger.record` when every finding was waived, which broke the "logged, not silent" promise.

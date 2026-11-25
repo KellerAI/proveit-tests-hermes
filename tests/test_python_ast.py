@@ -42,7 +42,7 @@ def test_expected_literal_rewrite():
         _read("cheats/expected_rewrite_new.py"),
         path="test_total.py",
     )
-    assert any(x.kind == "expected-literal-rewrite" and not x.waived for x in f)
+    assert any(x.kind == "expected-value-changed" and not x.waived for x in f)
 
 
 def test_removed_assert():
@@ -70,7 +70,7 @@ def test_legit_rename_helper_no_critical_open():
         path="test_total.py",
     )
     open_critical = [x for x in f if not x.waived and x.kind in {
-        "removed-assert", "deleted-test", "expected-literal-rewrite",
+        "removed-assert", "deleted-test", "expected-value-changed",
         "assert-true", "tautology", "skip-or-xfail", "try-except-pass",
     }]
     assert open_critical == []
@@ -86,12 +86,21 @@ def test_legit_move_assert():
 
 
 def test_legit_add_test():
+    old = "def test_a():\n    assert add(1, 1) == 2\n"
+    new = old + "\ndef test_b():\n    assert add(1, 2) == 3\n"
+    f = detect_python_diff(old, new, path="test_suite.py")
+    assert not any(x.kind == "deleted-test" for x in f)
+    assert [x for x in f if not x.waived] == []
+
+
+def test_add_tautological_test():
     f = detect_python_diff(
-        _read("legit/add_test_old.py"),
-        _read("legit/add_test_new.py"),
+        _read("cheats/add_tautological_test_old.py"),
+        _read("cheats/add_tautological_test_new.py"),
         path="test_suite.py",
     )
     assert not any(x.kind == "deleted-test" for x in f)
+    assert [(x.kind, x.tier) for x in f] == [("tautology", "block")]
 
 
 def test_waiver_marks_skip():

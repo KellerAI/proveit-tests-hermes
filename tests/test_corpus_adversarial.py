@@ -13,7 +13,7 @@ CORPUS = Path(__file__).resolve().parents[1] / "corpus"
 CRITICAL = {
     "removed-assert",
     "deleted-test",
-    "expected-literal-rewrite",
+    "expected-value-changed",
     "assert-true",
     "tautology",
     "skip-or-xfail",

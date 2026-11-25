@@ -17,8 +17,8 @@ from proveit_tests.receipts.ledger import Ledger
 
 
 def test_resolve_mode_defaults():
-    assert resolve_mode(None) == Mode.OBSERVE
-    assert resolve_mode("") == Mode.OBSERVE
+    assert resolve_mode(None) == Mode.BLOCK
+    assert resolve_mode("") == Mode.BLOCK
     assert resolve_mode("WARN") == Mode.OBSERVE
     assert resolve_mode("approve") == Mode.ESCALATE
 
@@ -154,7 +154,7 @@ def test_unittest_assert_equal_literal_rewrite():
         "        self.assertEqual(total, 9)\n"
     )
     f = detect_python_diff(old, new, path="test_t.py")
-    assert any(x.kind == "expected-literal-rewrite" for x in f)
+    assert any(x.kind == "expected-value-changed" for x in f)
 
 
 def test_summarize_and_syntax():

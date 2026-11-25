@@ -25,7 +25,7 @@ else:  # pragma: no cover - pytest imports the rootdir __init__.py top-level
     from proveit_tests.modes import resolve_mode
     from proveit_tests.receipts.ledger import resolve_ledger_dir
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # Module-level runtime so slash command + hooks share state within a process.
 _RUNTIME: ProveItRuntime | None = None
@@ -121,6 +121,7 @@ def register(ctx: Any) -> None:
         test_globs=settings.get("test_path_globs"),
         ci_globs=settings.get("ci_path_globs"),
         one_shot_nudge=bool(settings.get("one_shot_nudge", True)),
+        cwd=getattr(ctx, "cwd", None) or getattr(ctx, "workdir", None),
         session_id=str(getattr(ctx, "session_id", "") or ""),
     )
     rt = _RUNTIME
@@ -144,6 +145,7 @@ def register(ctx: Any) -> None:
 
     def on_session_start(session_id: str = "", **kwargs):
         rt.session_id = session_id or rt.session_id
+        rt.cwd = kwargs.get("cwd") or kwargs.get("workdir") or getattr(ctx, "cwd", None) or getattr(ctx, "workdir", None)
         rt._nudged = False
         rt._unexplained = []
         rt._pending_warnings = []

@@ -1,10 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "proveit-tests"
-version = "0.1.0"
-description = "Hermes plugin that catches agents weakening tests"
+version = "0.2.0"
+description = "A green test run your agent did not fake."
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "ProveIt" }]
+
+[tool.setuptools.packages.find]
+include = ["proveit_tests*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
